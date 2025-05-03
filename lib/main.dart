@@ -1,122 +1,189 @@
 import 'package:flutter/material.dart';
+import 'package:pfa/services/APIservice.dart';
+import 'package:provider/provider.dart'; // Importer Provider
+
+// Importer les Providers
+import 'providers/auth_provider.dart';
+import 'providers/PlaylistProvider.dart';
+import 'providers/home_provider.dart'; // Assurez-vous que ce fichier existe
+
+
+
+// Importer les Écrans
+import 'screens/auth_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/search_screen.dart';
+import 'screens/library_screen.dart';
+import 'screens/profile_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+
+  final apiService = ApiService();
+
+  runApp(
+    // Utiliser MultiProvider pour fournir tous les providers nécessaires
+    MultiProvider(
+      providers: [
+        // Fournir AuthProvider (qui dépend de ApiService)
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider(apiService),
+        ),
+        // Fournir PlaylistProvider (qui dépend de ApiService et AuthProvider)
+        ChangeNotifierProxyProvider<AuthProvider, PlaylistProvider>(
+          create: (context) => PlaylistProvider(
+              apiService, Provider.of<AuthProvider>(context, listen: false)),
+          update: (_, auth, previousPlaylistProvider) =>
+              PlaylistProvider(apiService, auth), // Passe l'instance auth mise à jour
+        ),
+        // Fournir HomeProvider (qui dépend de ApiService et optionnellement AuthProvider)
+        ChangeNotifierProxyProvider<AuthProvider, HomeProvider>(
+          create: (context) => HomeProvider(
+              apiService, Provider.of<AuthProvider>(context, listen: false)),
+          update: (_, auth, previousHomeProvider) =>
+              HomeProvider(apiService, auth), // Passe l'instance auth mise à jour
+        ),
+        // Ajoutez d'autres providers ici si nécessaire (ex: PlayerProvider)
+      ],
+      child: const MyApp(), // L'application principale
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    // Écouter AuthProvider pour déterminer l'écran initial
+    final authProvider = Provider.of<AuthProvider>(context);
+
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Flutter Music App',
+      debugShowCheckedModeBanner: false, // Optionnel: cache le bandeau debug
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-   gi     //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.grey[50],
+          foregroundColor: Colors.black87,
+          elevation: 1,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          selectedItemColor: Colors.deepPurple,
+          unselectedItemColor: Colors.grey,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed, // Assure la visibilité des labels
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+
+      ),
+      themeMode: ThemeMode.system,
+
+      // Logique pour l'écran de démarrage :
+      // Si l'utilisateur est authentifié, afficher MainScreen, sinon AuthScreen.
+      home: authProvider.isAuthenticated ? const MainScreen() : const AuthScreen(),
+
+      // Définir les routes nommées pour la navigation secondaire
+      routes: {
+        // Note: '/home' pointe vers MainScreen, cohérent avec la logique 'home:' ci-dessus
+        '/home': (context) => const MainScreen(),
+        '/auth': (context) => const AuthScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        },
+      // Gérer les routes inconnues pour éviter les crashs
+      onUnknownRoute: (settings) {
+        return MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Erreur')),
+              body: Center(child: Text('Route non trouvée: ${settings.name}')),
+            )
+        );
+      },
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MainScreenState extends State<MainScreen> {
+  int _selectedIndex = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  void _onItemTapped(int index) {
+
+    if (_selectedIndex != index) {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    // Définir la liste des widgets ICI
+    // Enlevez 'const' devant les écrans qui utilisent Provider.of dans leur build()
+    final List<Widget> widgetOptions = <Widget>[
+      HomeScreen(),      // Probablement besoin de Provider.of<HomeProvider> -> pas const
+      SearchScreen(),    // Probablement besoin de rechercher -> pas const si StatefulWidget
+      LibraryScreen(),   // Probablement besoin de Provider.of<PlaylistProvider> -> pas const
+      ProfileScreen(),   // Certainement besoin de Provider.of<AuthProvider> -> pas const
+    ];
+
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      // Utiliser IndexedStack pour préserver l'état des écrans lors du changement d'onglet
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: widgetOptions,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+      // Alternative (plus simple, mais reconstruit l'écran à chaque fois) :
+      // body: Center(
+      //   child: widgetOptions.elementAt(_selectedIndex),
+      // ),
+
+      bottomNavigationBar: BottomNavigationBar(
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Accueil',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search_outlined),
+            activeIcon: Icon(Icons.search),
+            label: 'Recherche',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.library_music_outlined),
+            activeIcon: Icon(Icons.library_music),
+            label: 'Bibliothèque',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profil',
+          ),
+        ],
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        // Le type et les couleurs sont hérités du thème défini dans MaterialApp
+        // type: BottomNavigationBarType.fixed,
+        // selectedItemColor: Theme.of(context).colorScheme.primary,
+        // unselectedItemColor: Colors.grey,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
