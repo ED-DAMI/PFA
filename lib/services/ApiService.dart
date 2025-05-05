@@ -8,7 +8,7 @@ import 'package:http_parser/http_parser.dart'; // Pour MediaType (upload)
 import '../config/api_config.dart'; // Votre URL de base
 import '../models/playlist.dart'; // Doit contenir Playlist.fromJson
 import '../models/song.dart';     // Doit contenir Song.fromJson
-// Importez d'autres modèles si nécessaire (User, Artist, Album...)
+
 
 class ApiService {
 
@@ -83,6 +83,7 @@ class ApiService {
   // --- Authentification ---
 
   Future<Map<String, dynamic>?> loginUser(String email, String password) async {
+    print(email+password);
     try {
       final response = await http.post(
         Uri.parse('$API_BASE_URL/api/auth/login'), // Adaptez l'endpoint réel

@@ -1,189 +1,134 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
-import 'package:pfa/services/APIservice.dart';
-import 'package:provider/provider.dart'; // Importer Provider
-
-// Importer les Providers
-import 'providers/auth_provider.dart';
-import 'providers/PlaylistProvider.dart';
-import 'providers/home_provider.dart'; // Assurez-vous que ce fichier existe
+import 'package:pfa/services/ApiService.dart';
 
 
 
-// Importer les Écrans
-import 'screens/auth_screen.dart';
-import 'screens/settings_screen.dart';
+import 'package:provider/provider.dart';
+
+// --- Importez TOUS vos modèles, services et providers ---
+// (Assurez-vous que les chemins et la casse sont corrects)
+import 'config/api_config.dart'; // Service API
+import 'services/audio_player_service.dart'; // Service Audio
+import 'providers/auth_provider.dart';       // Provider Auth
+import 'providers/home_provider.dart';       // Provider Home
+import 'providers/PlaylistProvider.dart';   // Provider Playlist
+
+// --- Importez vos écrans principaux ---
 import 'screens/home_screen.dart';
-import 'screens/search_screen.dart';
-import 'screens/library_screen.dart';
-import 'screens/profile_screen.dart';
+import 'screens/now_playing_screen.dart';
+// Importez d'autres écrans utilisés dans les routes si nécessaire
+
+// --- Définir l'URL de base du Backend ---
+// !! IMPORTANT : MODIFIEZ CECI AVEC VOTRE VRAIE URL !!
+const String API_BASE_URL1 =API_BASE_URL ;
 
 void main() {
-
-  final apiService = ApiService();
+// Optionnel: assure l'initialisation si des plugins l'exigent avant runApp
+// WidgetsFlutterBinding.ensureInitialized();
 
   runApp(
-    // Utiliser MultiProvider pour fournir tous les providers nécessaires
+// Fournir tous les services et états globaux à l'application
     MultiProvider(
       providers: [
-        // Fournir AuthProvider (qui dépend de ApiService)
-        ChangeNotifierProvider(
-          create: (_) => AuthProvider(apiService),
+// 1. Services de base (pas de dépendances inter-providers)
+        Provider<ApiService>(
+          create: (_) => ApiService(), // Instance unique d'ApiService
+// lazy: false, // Décommentez si vous voulez le créer immédiatement
         ),
-        // Fournir PlaylistProvider (qui dépend de ApiService et AuthProvider)
-        ChangeNotifierProxyProvider<AuthProvider, PlaylistProvider>(
-          create: (context) => PlaylistProvider(
-              apiService, Provider.of<AuthProvider>(context, listen: false)),
-          update: (_, auth, previousPlaylistProvider) =>
-              PlaylistProvider(apiService, auth), // Passe l'instance auth mise à jour
+
+// 2. Providers qui dépendent des services de base
+        ChangeNotifierProvider<AuthProvider>(
+          create: (context) => AuthProvider(
+            context.read<ApiService>() // Injecte ApiService
+          ),
         ),
-        // Fournir HomeProvider (qui dépend de ApiService et optionnellement AuthProvider)
-        ChangeNotifierProxyProvider<AuthProvider, HomeProvider>(
+
+        ChangeNotifierProvider<AudioPlayerService>(
+// Injecte l'URL de base nécessaire au service audio
+          create: (_) => AudioPlayerService(baseUrl: API_BASE_URL),
+        ),
+
+        ChangeNotifierProvider<HomeProvider>(
           create: (context) => HomeProvider(
-              apiService, Provider.of<AuthProvider>(context, listen: false)),
-          update: (_, auth, previousHomeProvider) =>
-              HomeProvider(apiService, auth), // Passe l'instance auth mise à jour
+            context.read<ApiService>() , // Injecte ApiService
+// Injectez AuthProvider si HomeProvider en a besoin:
+// context.read<AuthProvider>(),
+          ),
         ),
-        // Ajoutez d'autres providers ici si nécessaire (ex: PlayerProvider)
+
+// 3. Providers qui dépendent d'autres Providers (ProxyProvider est utile ici)
+        ChangeNotifierProxyProvider<AuthProvider, PlaylistProvider>(
+// Crée l'instance initiale
+            create: (context) => PlaylistProvider(
+              context.read<ApiService>(), // Injecte ApiService
+              context.read<AuthProvider>(), // Injecte AuthProvider initial
+            ),
+// Met à jour PlaylistProvider quand AuthProvider notifie un changement
+            update: (context, authProvider, previousPlaylistProvider) {
+// Crée une nouvelle instance ou met à jour l'ancienne
+// Ici, on en crée une nouvelle qui s'abonne au nouvel AuthProvider
+// (S'assure que le constructeur et dispose gèrent bien l'abonnement/désabonnement)
+              print("[MultiProvider] AuthProvider changed, updating PlaylistProvider.");
+              return PlaylistProvider(
+                context.read<ApiService>(), // ApiService ne change pas
+                authProvider, // Passe la NOUVELLE instance/état d'AuthProvider
+              );
+            }
+        ),
+
+// Ajoutez d'autres providers globaux ici si nécessaire...
+
       ],
-      child: const MyApp(), // L'application principale
+      child: const MyApp(), // Le widget racine de votre application
     ),
   );
 }
 
+// --- Classe Principale de l'Application ---
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Écouter AuthProvider pour déterminer l'écran initial
-    final authProvider = Provider.of<AuthProvider>(context);
-
     return MaterialApp(
-      title: 'Flutter Music App',
-      debugShowCheckedModeBanner: false, // Optionnel: cache le bandeau debug
+      title: 'Music App', // Changez le nom de votre application
+      debugShowCheckedModeBanner: false, // Masquer la bannière "Debug"
       theme: ThemeData(
+// Définissez votre thème principal
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.light,
+          seedColor: Colors.deepPurple, // Couleur de base pour générer la palette
+          brightness: Brightness.dark, // Thème sombre (ou Brightness.light pour clair)
         ),
-        useMaterial3: true,
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.grey[50],
-          foregroundColor: Colors.black87,
-          elevation: 1,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          selectedItemColor: Colors.deepPurple,
-          unselectedItemColor: Colors.grey,
-          showUnselectedLabels: true,
-          type: BottomNavigationBarType.fixed, // Assure la visibilité des labels
-        ),
+        useMaterial3: true, // Activer le style Material 3
+// Personnalisez d'autres aspects du thème si nécessaire
+// appBarTheme: AppBarTheme(...)
+// elevatedButtonTheme: ElevatedButtonThemeData(...)
       ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
 
-      ),
-      themeMode: ThemeMode.system,
+// Écran de démarrage de l'application
+// HomeScreen n'a plus besoin de `baseUrl` car ses enfants (SongListItem)
+// le récupèrent du constructeur ou d'un Provider/config.
+      home: const HomeScreen(),
 
-      // Logique pour l'écran de démarrage :
-      // Si l'utilisateur est authentifié, afficher MainScreen, sinon AuthScreen.
-      home: authProvider.isAuthenticated ? const MainScreen() : const AuthScreen(),
-
-      // Définir les routes nommées pour la navigation secondaire
+// Définir les routes nommées pour la navigation
       routes: {
-        // Note: '/home' pointe vers MainScreen, cohérent avec la logique 'home:' ci-dessus
-        '/home': (context) => const MainScreen(),
-        '/auth': (context) => const AuthScreen(),
-        '/settings': (context) => const SettingsScreen(),
-        },
-      // Gérer les routes inconnues pour éviter les crashs
-      onUnknownRoute: (settings) {
-        return MaterialPageRoute(
-            builder: (_) => Scaffold(
-              appBar: AppBar(title: const Text('Erreur')),
-              body: Center(child: Text('Route non trouvée: ${settings.name}')),
-            )
-        );
+// '/login': (context) => LoginScreen(), // Exemple
+// '/signup': (context) => SignupScreen(), // Exemple
+// NowPlayingScreen a besoin de baseUrl. Si on utilise une route nommée,
+// il faut un moyen de lui passer (via arguments ou un Provider de config).
+// Si vous naviguez toujours avec MaterialPageRoute, c'est géré directement.
+        '/now_playing': (context) => const NowPlayingScreen(baseUrl: API_BASE_URL),
+// La route pour PlaylistDetailScreen nécessiterait de passer des arguments (id, name, baseUrl)
+// '/playlist_detail': (context) => ... // Gérer les arguments
       },
-    );
-  }
-}
 
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+// Optionnel: Gérer les routes inconnues
+// onUnknownRoute: (settings) { ... }
 
-  @override
-  State<MainScreen> createState() => _MainScreenState();
-}
-
-class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
-
-  void _onItemTapped(int index) {
-
-    if (_selectedIndex != index) {
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Définir la liste des widgets ICI
-    // Enlevez 'const' devant les écrans qui utilisent Provider.of dans leur build()
-    final List<Widget> widgetOptions = <Widget>[
-      HomeScreen(),      // Probablement besoin de Provider.of<HomeProvider> -> pas const
-      SearchScreen(),    // Probablement besoin de rechercher -> pas const si StatefulWidget
-      LibraryScreen(),   // Probablement besoin de Provider.of<PlaylistProvider> -> pas const
-      ProfileScreen(),   // Certainement besoin de Provider.of<AuthProvider> -> pas const
-    ];
-
-    return Scaffold(
-      // Utiliser IndexedStack pour préserver l'état des écrans lors du changement d'onglet
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: widgetOptions,
-      ),
-      // Alternative (plus simple, mais reconstruit l'écran à chaque fois) :
-      // body: Center(
-      //   child: widgetOptions.elementAt(_selectedIndex),
-      // ),
-
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Accueil',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search_outlined),
-            activeIcon: Icon(Icons.search),
-            label: 'Recherche',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_music_outlined),
-            activeIcon: Icon(Icons.library_music),
-            label: 'Bibliothèque',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profil',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        // Le type et les couleurs sont hérités du thème défini dans MaterialApp
-        // type: BottomNavigationBarType.fixed,
-        // selectedItemColor: Theme.of(context).colorScheme.primary,
-        // unselectedItemColor: Colors.grey,
-      ),
+// Optionnel: Observer de navigation
+// navigatorObservers: [ ... ]
     );
   }
 }

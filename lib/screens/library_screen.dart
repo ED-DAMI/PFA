@@ -76,7 +76,7 @@ class LibraryScreen extends StatelessWidget {
               MaterialPageRoute(
                 builder: (context) => PlaylistDetailScreen(
                   playlistId: playlist.id, // Passer l'ID réel
-                  playlistName: playlist.name, // Passer le nom réel
+                  playlistName: playlist.name, baseUrl: '', // Passer le nom réel
                 ),
               ),
             );

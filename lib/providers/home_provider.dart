@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 // Assurez-vous que l'import utilise la bonne casse !
 import '../models/song.dart'; // <-- Utilise 'song.dart'
-import '../services/APIservice.dart';
+import '../services/ApiService.dart';
 import '../providers/auth_provider.dart';
 import '../models/playlist.dart';
 
@@ -46,8 +46,8 @@ class HomeProvider with ChangeNotifier {
       // Utiliser Future.wait pour récupérer les données en parallèle (plus rapide)
       final results = await Future.wait([
         _apiService.fetchPlaylists(), // Récupère les playlists
-        _apiService.fetchRecommendations(_authProvider?.token), // Récupère les recommandations
-        _apiService.fetchRecommendations(_authProvider?.token), // *** AJOUT/CORRECTION: Récupère les nouveautés ***
+        _apiService.fetchRecommendations(await _authProvider?.getToken()), // Récupère les recommandations
+        _apiService.fetchRecommendations(await _authProvider?.getToken()), // *** AJOUT/CORRECTION: Récupère les nouveautés ***
       ]);
 
       // Effacer l'erreur seulement après un fetch réussi
