@@ -115,10 +115,7 @@ class AudioPlayerService with ChangeNotifier {
     print("[AudioPlayerService] Attempting to play from: $directAudioUrl");
 
     try {
-      print('\n\n');print('\n\n');
-      print("url="+directAudioUrl);
-      print('\n\n');
-      print('\n\n');
+
       // ****************** AVERTISSEMENT DE SÉCURITÉ MAJEUR ******************
       // audioplayers via UrlSource NE PEUT PAS envoyer de headers 'Authorization'.
       // Votre endpoint backend `GET /api/songs/{id}/audio` DOIT être accessible

@@ -104,7 +104,7 @@ class _SearchScreenState extends State<SearchScreen> {
           title: Text('Résultat de recherche ${index + 1}'),
           subtitle: Text('Type: ${_selectedFilter ?? "Tout"}'),
           onTap: () {
-            // TODO: Navigate to the specific item (artist, album, song)
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Tapped search result ${index + 1}')),
             );

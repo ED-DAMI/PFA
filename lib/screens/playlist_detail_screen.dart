@@ -1,25 +1,26 @@
 // lib/screens/playlist_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/playlist.dart'; // Assurez-vous que ce modèle est correct
-import '../models/song.dart';     // Assurez-vous que ce modèle est correct
+import '../models/playlist.dart';
+import '../models/song.dart';
+// Correction du chemin pour SongListItem si ce n'est pas un provider mais un widget
+// Si SongListItem est un widget dans lib/widgets/song_list_item.dart
 import '../providers/SongListItem.dart';
-import '../services/ApiService.dart'; // Correction du nom du fichier/classe si nécessaire
+// Assurez-vous que ce chemin est correct
+import '../services/ApiService.dart';
 import '../providers/auth_provider.dart';
-import '../services/audio_player_service.dart'; // Pour jouer la musique
-     // Utiliser SongListItem pour l'affichage
+// AudioPlayerService n'est pas directement utilisé dans build ici, donc pas besoin de le récupérer dans build à moins d'une action spécifique.
 
 class PlaylistDetailScreen extends StatefulWidget {
   final String playlistId;
   final String playlistName;
-  // Récupérer baseUrl si les images sont chargées via /api/songs/{id}/image
-  final String baseUrl; // = "http://192.168.1.125:8080"; // A PASSER OU RECUPERER
+  final String baseUrl;
 
   const PlaylistDetailScreen({
     super.key,
     required this.playlistId,
     required this.playlistName,
-    required this.baseUrl, // Ajouter baseUrl requis
+    required this.baseUrl,
   });
 
   @override
@@ -29,56 +30,46 @@ class PlaylistDetailScreen extends StatefulWidget {
 class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
   bool _isLoading = true;
   String? _errorMessage;
-  Playlist? _playlist;
-
-  // Il est MIEUX d'obtenir ApiService via Provider, mais on le garde direct pour l'instant
-  // late ApiService _apiService;
-  // Tardif si obtenu via Provider dans didChangeDependencies ou build
+  Playlist? _playlist; // Peut être null
 
   @override
   void initState() {
     super.initState();
-    // Ne pas initialiser _apiService ici si on utilise Provider
-    // _apiService = ApiService(); // À éviter si possible
-
-    // Utiliser addPostFrameCallback pour accéder au Provider après la construction initiale
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // On récupère le token ici pour le premier fetch
       _fetchDetails();
     });
   }
 
   Future<void> _fetchDetails() async {
-    // Vérifier si le widget est toujours monté
     if (!mounted) return;
 
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      // Optionnel: réinitialiser _playlist à null ici pour forcer le rechargement complet de l'UI
+      // _playlist = null;
     });
 
     try {
-      // Accéder aux providers DANS la méthode (ou via didChangeDependencies)
       final apiService = Provider.of<ApiService>(context, listen: false);
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-      // --- CORRECTION ICI ---
-      // Récupérer le token de manière asynchrone
       final String? authToken = await authProvider.getToken();
 
-      // Vérifier si le token est disponible (utilisateur connecté ?)
-      // fetchPlaylistDetails pourrait nécessiter un token non-null ?
-      // if (authToken == null) {
-      //    throw Exception("Authentification requise pour voir les détails de la playlist.");
+      // if (authToken == null) { // Décommenter si le token est absolument requis
+      //   if (mounted) {
+      //     setState(() {
+      //       _errorMessage = "Authentification requise pour voir les détails de la playlist.";
+      //       _isLoading = false;
+      //     });
+      //   }
+      //   return;
       // }
 
-      // Appeler l'API avec le token résolu (qui peut être null si fetchPlaylistDetails l'accepte)
       final playlistData = await apiService.fetchPlaylistDetails(widget.playlistId, authToken: authToken);
 
-      // Vérifier si le widget est toujours monté avant d'appeler setState
       if (mounted) {
         setState(() {
-          _playlist = playlistData; // Peut être null si l'API retourne null
+          _playlist = playlistData; // playlistData peut être null si l'API retourne null ou une erreur gérée
         });
       }
     } catch (e) {
@@ -97,42 +88,37 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     }
   }
 
+  // _removeSong reste inchangé pour l'instant, mais assurez-vous que la logique
+  // de récupération du token et d'appel API est correcte.
+
   Future<void> _removeSong(String songId) async {
-    // Vérifier si le widget est toujours monté
     if (!mounted) return;
 
-    // Afficher un indicateur (ex: SnackBar)
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Tentative de suppression...'), duration: Duration(seconds: 1)));
 
     try {
-      // Accéder aux providers
       final apiService = Provider.of<ApiService>(context, listen: false);
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-      // --- CORRECTION ICI ---
-      // Récupérer le token de manière asynchrone
       final String? authToken = await authProvider.getToken();
 
-      // Vérifier si l'utilisateur est authentifié
       if (authToken == null) {
         throw Exception("Authentification requise pour supprimer la chanson.");
       }
 
-      // Appeler l'API avec le token résolu (non-nul ici car vérifié)
       bool success = await apiService.removeSongFromPlaylist(
           widget.playlistId,
           songId,
-          authToken: authToken // Passer le String obtenu
+          authToken: authToken
       );
 
       if (success && mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar(); // Cache le message précédent
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Chanson retirée avec succès'),
           backgroundColor: Colors.green,
         ));
-        _fetchDetails(); // Recharger les détails pour mettre à jour la liste
+        _fetchDetails();
       } else if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -149,27 +135,22 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           backgroundColor: Colors.red,
         ));
       }
-    } finally {
-      // Optionnel: masquer un indicateur de chargement spécifique à la suppression si utilisé
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
-    // Il est préférable d'accéder au provider ici si des actions dépendent de son état
-    // final audioPlayerService = Provider.of<AudioPlayerService>(context, listen: false);
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(_playlist?.name ?? widget.playlistName), // Nom dynamique
+        // Utiliser le nom de la playlist chargée si disponible, sinon le nom passé en widget
+        title: Text(_playlist?.name ?? widget.playlistName),
         actions: [
-          // Bouton de rafraîchissement
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Rafraîchir',
-            onPressed: _isLoading ? null : _fetchDetails, // Désactivé pendant le chargement
+            onPressed: _isLoading ? null : _fetchDetails,
           ),
-          // TODO: Ajouter d'autres actions (ex: modifier, supprimer playlist)
         ],
       ),
       body: _buildBody(),
@@ -185,7 +166,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column( // Pour le bouton Réessayer
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text('Erreur: $_errorMessage', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -201,54 +182,58 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       );
     }
 
+    // --- MODIFICATION CRUCIALE ICI ---
+    // Vérifier si _playlist est null OU si _playlist.songs est null (si le modèle le permet)
+    // ou vide. Il est préférable que _playlist.songs soit toujours une liste (même vide)
+    // et non nullable dans le modèle Playlist.
     if (_playlist == null) {
-      return const Center(child: Text('Playlist non trouvée ou vide.'));
+      return const Center(
+        child: Text('Playlist non trouvée ou les données sont indisponibles.'),
+      );
     }
 
-    // Afficher les détails et la liste
+    // À ce stade, _playlist n'est PAS null.
+    // Si votre modèle Playlist garantit que `songs` n'est jamais null (initialisé à `[]`),
+    // vous n'avez pas besoin de vérifier `_playlist!.songs == null`.
+    // Sinon, ajoutez une vérification ou utilisez l'opérateur `?.`
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start, // Aligner le titre des morceaux
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // --- En-tête de la Playlist (Image, Nom, Description) ---
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Image (si disponible, avec gestion du token si nécessaire)
-              // Note: Le modèle Playlist actuel n'a pas imageUrl, il faudrait l'ajouter
-              // if (_playlist!.imageUrl != null)
-              //   _buildPlaylistImage(context, _playlist!.imageUrl!), // Utiliser un helper
-              // else
-              const Icon(Icons.playlist_play, size: 100, color: Colors.grey), // Placeholder
+              const Icon(Icons.playlist_play, size: 100, color: Colors.grey),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _playlist!.name,
+                      _playlist!.name, // Safe, _playlist is not null here
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     if (_playlist!.description != null && _playlist!.description!.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Text(_playlist!.description!),
+                      Text(_playlist!.description!), // Safe
                     ],
                     const SizedBox(height: 8),
                     Text(
+                      // Safe, _playlist is not null. Si _playlist.songs peut être null:
+                      // '${_playlist!.songs?.length ?? 0} morceau${(_playlist!.songs?.length ?? 0) == 1 ? "" : "x"}',
+                      // Mais il est préférable que _playlist.songs soit List<Song> et non List<Song>?
                       '${_playlist!.songs.length} morceau${_playlist!.songs.length == 1 ? "" : "x"}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    // TODO: Ajouter créateur, date, etc. si disponible
                   ],
                 ),
               ),
             ],
           ),
         ),
-
-        const Divider(), // Séparateur
-
+        const Divider(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Text(
@@ -256,20 +241,20 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
-
-        // --- Liste des Chansons ---
         Expanded(
+          // Safe, _playlist is not null.
+          // Si _playlist.songs peut être null: if (_playlist!.songs == null || _playlist!.songs!.isEmpty)
           child: _playlist!.songs.isEmpty
               ? const Center(child: Text('Cette playlist est vide.'))
-          // Utiliser SongListItem pour chaque chanson
               : ListView.builder(
+            // Safe, _playlist.songs n'est pas null ici (si le modèle est bien fait) et n'est pas vide.
             itemCount: _playlist!.songs.length,
             itemBuilder: (context, index) {
               final song = _playlist!.songs[index];
-              // Utiliser le widget SongListItem qui gère son affichage et le play
-              return SongListItem(
+              return SongListItem( // Assurez-vous que SongListItem est importé correctement
                 song: song,
-                baseUrl: widget.baseUrl, // Passer baseUrl
+                baseUrl: widget.baseUrl,
+                // key: ValueKey(song.id), // Optionnel: ajouter une clé si la liste peut être modifiée dynamiquement
               );
             },
           ),
@@ -277,15 +262,4 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
       ],
     );
   }
-
-// --- Helper pour l'image de Playlist (si nécessaire) ---
-// Widget _buildPlaylistImage(BuildContext context, String imageUrl) {
-//    // Logique similaire à SongListItem pour récupérer le token et afficher
-//    // avec Image.network(headers:...) si l'URL de l'image playlist est protégée.
-//    // Sinon, juste Image.network(imageUrl).
-//    return Image.network(imageUrl, width: 100, height: 100, fit: BoxFit.cover,
-//        errorBuilder: (ctx, err, st) => const Icon(Icons.broken_image, size: 100),
-//    );
-// }
-
 }
