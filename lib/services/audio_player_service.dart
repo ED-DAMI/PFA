@@ -2,6 +2,7 @@
 import 'dart:async'; // Pour debounce potentiel (non implémenté ici)
 import 'package:flutter/foundation.dart';
 import 'package:audioplayers/audioplayers.dart';
+import '../config/api_config.dart';
 import '../models/song.dart'; // Vérifiez le chemin
 
 class AudioPlayerService with ChangeNotifier {
@@ -24,7 +25,7 @@ class AudioPlayerService with ChangeNotifier {
   bool get isPlaying => _playerState == PlayerState.playing;
 
   // Constructeur injectant l'URL de base
-  AudioPlayerService({required String baseUrl}) : _baseUrl = baseUrl {
+  AudioPlayerService() : _baseUrl =API_BASE_URL {
     _initAudioPlayer();
   }
 
