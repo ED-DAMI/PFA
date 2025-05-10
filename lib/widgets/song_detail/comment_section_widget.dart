@@ -27,7 +27,7 @@ class _CommentSectionWidgetState extends State<CommentSectionWidget> {
 
     setState(() => _isPostingComment = true);
     final success = await Provider.of<InteractionProvider>(context, listen: false)
-        .addComment(widget.songId, _commentController.text.trim());
+        .addComment(_commentController.text.trim());
 
     if (!mounted) return;
     setState(() => _isPostingComment = false);

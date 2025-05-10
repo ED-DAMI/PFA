@@ -30,9 +30,7 @@ class SongProvider with ChangeNotifier {
     // L'appel initial à initialize() est maintenant géré par la logique de updateAuthProvider
     // qui est appelée par ChangeNotifierProxyProvider juste après la création,
     // ou par un appel explicite si nécessaire dans le `create` du ProxyProvider (moins courant).
-    // Pour s'assurer qu'il est appelé au moins une fois après la création si l'auth est déjà valide :
-    // Future.microtask(() => initializeIfNeeded()); // Déclenche l'initialisation si nécessaire après la construction
-    // OU mieux : laisser updateAuthProvider faire son travail lors du premier update du ProxyProvider.
+    // updateAuthProvider sera appelé par le ProxyProvider après la création, qui déclenchera initialize si nécessaire.
   }
 
   // --- Getters ---
@@ -54,21 +52,18 @@ class SongProvider with ChangeNotifier {
       print("SongProvider: initialize() called. Current auth state: ${_authProvider.isAuthenticated}, Token available: ${_authProvider.token != null}");
     }
 
-    // Si déjà initialisé ET que l'auth n'a pas changé de manière à nécessiter un rechargement, on sort.
-    // Cette vérification est importante car initialize() peut être appelé par updateAuthProvider.
-    // Si _isInitialized est true ici, cela signifie que les données ont été chargées avec l'état actuel de _authProvider.
-    if (_isInitialized) {
+    if (_isInitialized) { // Si déjà initialisé avec le contexte actuel, ne rien faire.
+      // updateAuthProvider se charge de setter _isInitialized à false si l'auth change.
       if (kDebugMode) {
-        print("SongProvider: Already initialized with current auth context. Skipping re-initialization.");
+        print("SongProvider: Already initialized for current auth context. Skipping re-initialization.");
       }
       return;
     }
 
-    final token = _authProvider.token; // Accès direct au token actuel de l'AuthProvider interne
-    // Si l'authProvider n'a pas encore chargé son token (ex: depuis SharedPreferences), token peut être null.
-    // Attendre que AuthProvider soit prêt peut être une stratégie, mais ici on se base sur son état actuel.
-    // Si le token est requis pour fetchSongs/fetchTags et qu'il est null, l'API échouera ou retournera des données publiques.
+    final token = _authProvider.token;
 
+    // Condition pour autoriser le fetch: soit authentifié, soit token disponible (pour API publique avec token d'app)
+    // Adapter cette logique si des endpoints sont purement publics sans token.
     if (_authProvider.isAuthenticated || token != null /*pour endpoints avec token d'app même si non loggué*/) {
       _isLoadingSongs = true;
       _isLoadingTags = true;
@@ -88,7 +83,7 @@ class SongProvider with ChangeNotifier {
         _tags = results[1] as List<Tag>;
 
         _applyFiltersAndSearch();
-        _isInitialized = true; // Marquer comme initialisé APRÈS succès
+        _isInitialized = true;
         if (kDebugMode) {
           print("SongProvider: Initial data fetched. ${_allSongs.length} songs, ${_tags.length} tags.");
         }
@@ -115,8 +110,9 @@ class SongProvider with ChangeNotifier {
       _tags = [];
       _selectedTag = null;
       _searchQuery = '';
-      _error = _authProvider.isAuthenticated ? "Token d'application manquant." : "Veuillez vous connecter pour voir les chansons.";
-      _isInitialized = false;
+      // Message d'erreur plus précis en fonction de l'état de l'authentification
+      _error = !_authProvider.isAuthenticated && token == null ? "Veuillez vous connecter pour voir les chansons." : "Problème de configuration ou d'authentification.";
+      _isInitialized = false; // On considère que non initialisé si pas d'auth/token pour fetch
       _isLoadingSongs = false;
       _isLoadingTags = false;
       notifyListeners();
@@ -127,33 +123,24 @@ class SongProvider with ChangeNotifier {
   void updateAuthProvider(AuthProvider newAuthProvider) {
     if (kDebugMode) {
       print("SongProvider: updateAuthProvider called. New auth state: ${newAuthProvider.isAuthenticated}, New token: ${newAuthProvider.token != null}");
+      print("SongProvider: Old auth state: ${_authProvider.isAuthenticated}, Old token: ${_authProvider.token != null}, Was initialized: $_isInitialized");
     }
 
-    bool authSignificantlyChanged = (_authProvider.token != newAuthProvider.token) ||
-        (_authProvider.isAuthenticated != newAuthProvider.isAuthenticated) ||
-        !_isInitialized; // Forcer l'initialisation si elle n'a jamais eu lieu
+    bool authContextChanged = (_authProvider.token != newAuthProvider.token) ||
+        (_authProvider.isAuthenticated != newAuthProvider.isAuthenticated);
 
     _authProvider = newAuthProvider; // Toujours mettre à jour la référence
 
-    if (authSignificantlyChanged) {
+    if (authContextChanged || !_isInitialized) { // Si l'auth a changé OU si jamais initialisé
       if (kDebugMode) {
-        print("SongProvider: Auth state changed significantly or not initialized. Re-initializing SongProvider data.");
+        print("SongProvider: Auth state changed or not initialized. Resetting and re-initializing SongProvider data.");
       }
-      _isInitialized = false; // Forcer la réinitialisation (ou la première initialisation)
+      _isInitialized = false; // Marquer pour réinitialisation (ou première initialisation)
       initialize(); // Relancer l'initialisation avec le nouvel état d'auth
     } else if (kDebugMode) {
-      print("SongProvider: Auth state unchanged or already initialized. No re-initialization needed by updateAuthProvider.");
+      print("SongProvider: Auth state effectively unchanged and already initialized. No re-initialization needed by updateAuthProvider.");
     }
   }
-
-  // Le reste du code de SongProvider (selectTag, searchSongs, _applyFiltersAndSearch, getSongById, incrementViewCount, clearError, dispose)
-  // est globalement bien structuré et peut rester tel quel.
-  // Assurez-vous que la logique de filtrage dans _applyFiltersAndSearch corresponde bien à vos modèles de données.
-  // Par exemple, pour les tags :
-  //   tempSongs = tempSongs.where((song) =>
-  //     song.genre?.toLowerCase() == _selectedTag!.name.toLowerCase() // si genre est un String
-  //     // ou song.tagIds?.contains(_selectedTag!.id) ?? false // si song a une liste d'IDs de tags
-  //   ).toList();
 
 
   // --- Logique de filtrage et de recherche ---
@@ -186,18 +173,16 @@ class SongProvider with ChangeNotifier {
       // Adaptez ceci à la structure de vos modèles Song et Tag.
       // Si Song.genre est un String qui doit correspondre à Tag.name :
       tempSongs = tempSongs.where((song) =>
-      song.genre?.toLowerCase() == _selectedTag!.name.toLowerCase()
+      song.genre.toLowerCase() == _selectedTag!.name.toLowerCase()
       ).toList();
-      // Si Song a un champ comme `List<String> tagIds` et Tag a `String id`:
-      // tempSongs = tempSongs.where((song) =>
-      //   song.tagIds?.contains(_selectedTag!.id) ?? false
-      // ).toList();
     }
 
     if (_searchQuery.isNotEmpty) {
       tempSongs = tempSongs.where((song) {
         final titleMatch = song.title.toLowerCase().contains(_searchQuery);
         final artistMatch = song.artist.toLowerCase().contains(_searchQuery);
+        // Ajoutez d'autres champs si nécessaire (ex: album)
+        // final albumMatch = song.album?.toLowerCase().contains(_searchQuery) ?? false;
         return titleMatch || artistMatch;
       }).toList();
     }
@@ -214,6 +199,7 @@ class SongProvider with ChangeNotifier {
     if (kDebugMode) {
       print("SongProvider: Getting song by ID: $songId");
     }
+    // Tente de trouver la chanson dans le cache local en premier
     try {
       final localSong = _allSongs.firstWhere((s) => s.id == songId);
       if (kDebugMode) print("SongProvider: Song $songId found in local cache (_allSongs).");
@@ -222,8 +208,9 @@ class SongProvider with ChangeNotifier {
       if (kDebugMode) print("SongProvider: Song $songId not in _allSongs. Will try API.");
     }
 
+    // Si non trouvée localement, et si on veut fetch individuellement (sinon, dépendre du fetch global)
     _isLoadingSongDetails = true;
-    _error = null;
+    _error = null; // Efface l'erreur précédente pour cette opération spécifique
     notifyListeners();
 
     try {
@@ -231,8 +218,8 @@ class SongProvider with ChangeNotifier {
       final song = await _apiService.fetchSongById(songId, authToken: token);
       if (song != null) {
         if (kDebugMode) print("SongProvider: Song $songId fetched from API successfully.");
-        // Optionnel: Mettre à jour _allSongs pour le cache, attention à la duplication et à l'ordre.
-        // Il est souvent plus simple de ne pas le faire ici et de compter sur un re-fetch global si nécessaire.
+        // Optionnel: Mettre à jour _allSongs. Attention à la gestion des doublons ou à la cohérence de la liste.
+        // Une stratégie simple est de ne pas l'ajouter à _allSongs ici et de compter sur un re-fetch global.
       } else {
         if (kDebugMode) print("SongProvider: Song $songId not found via API.");
       }
@@ -241,13 +228,59 @@ class SongProvider with ChangeNotifier {
       if (kDebugMode) {
         print("SongProvider: Error fetching song $songId by ID: $e");
       }
-      _error = "Erreur lors du chargement des détails de la chanson.";
+      _error = "Erreur lors du chargement des détails de la chanson."; // Erreur spécifique pour cette action
       return null;
     } finally {
       _isLoadingSongDetails = false;
       notifyListeners();
     }
   }
+
+  // Méthode pour mettre à jour les compteurs d'une chanson (ex: après un commentaire ou une réaction)
+  // Cette méthode devrait être appelée depuis l'extérieur (ex: InteractionProvider via un callback, ou depuis l'UI)
+  // si une mise à jour en temps réel des listes est souhaitée sans re-fetch complet.
+  void updateSongInteractionCounts(String songId, {int? newCommentCount, int? newReactionCount}) {
+    final songIndex = _allSongs.indexWhere((s) => s.id == songId);
+    if (songIndex != -1) {
+      final originalSong = _allSongs[songIndex];
+      bool changed = false;
+
+      int updatedCommentCount = originalSong.commentCount;
+      if (newCommentCount != null && newCommentCount != originalSong.commentCount) {
+        updatedCommentCount = newCommentCount;
+        changed = true;
+      }
+
+      int updatedReactionCount = originalSong.totalReactionCount;
+      if (newReactionCount != null && newReactionCount != originalSong.totalReactionCount) {
+        updatedReactionCount = newReactionCount;
+        changed = true;
+      }
+
+      if (changed) {
+        _allSongs[songIndex] = Song(
+          id: originalSong.id,
+          title: originalSong.title,
+          artist: originalSong.artist,
+          album: originalSong.album,
+          genre: originalSong.genre,
+          duration: originalSong.duration,
+          releaseDate: originalSong.releaseDate,
+          language: originalSong.language,
+          tags: originalSong.tags,
+          createdAt: originalSong.createdAt,
+          viewCount: originalSong.viewCount,
+          commentCount: updatedCommentCount, // updated
+          totalReactionCount: updatedReactionCount, // updated
+        );
+        _applyFiltersAndSearch(); // Pour que _filteredSongs soit aussi mise à jour et notifie les listeners
+        if (kDebugMode) {
+          print("SongProvider: Updated interaction counts for song $songId. New comments: $updatedCommentCount, New reactions: $updatedReactionCount");
+        }
+      }
+    }
+  }
+
 
   // --- Gestion des erreurs ---
   void clearError() {

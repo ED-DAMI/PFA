@@ -8,13 +8,13 @@ import 'package:provider/provider.dart';
 import '../models/song.dart';
 import '../providers/auth_provider.dart';
 import '../providers/interaction_provider.dart';
-import '../providers/song_provider.dart';
+// import '../providers/song_provider.dart'; // SongProvider n'est pas directement utilisé ici pour les recommandations
 import '../services/ApiService.dart'; // Importer ApiService
 import '../services/audio_player_service.dart';
 import '../utils/helpers.dart';
 import '../widgets/song_detail/comment_section_widget.dart';
 import '../widgets/song_detail/reaction_bar_widget.dart';
-import '../widgets/home/song_list_item_widget.dart'; // Pour afficher les recommandations
+// import '../widgets/home/song_list_item_widget.dart'; // Non réutilisé pour les recommandations
 
 class SongDetailScreen extends StatefulWidget {
   static const routeName = '/song-detail';
@@ -74,8 +74,6 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       _recommendationsError = null;
     });
     try {
-      // Utiliser ApiService directement ici pour la simplicité, ou via un Provider dédié.
-      // Assurez-vous que votre ApiService est accessible (par exemple, via Provider ou en l'instanciant)
       final apiService = Provider.of<ApiService>(context, listen: false);
       final recommendations = await apiService.fetchRecommendedSongs(widget.song.id, authToken: Provider.of<AuthProvider>(context, listen: false).token);
       if (mounted) {
@@ -95,14 +93,13 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
   }
 
   void _scrollToSection(GlobalKey key) {
-    // ... (code inchangé)
     final context = key.currentContext;
     if (context != null) {
       Scrollable.ensureVisible(
         context,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
-        alignment: 0.1,
+        alignment: 0.1, // Scroll to near the top of the section
       );
     }
   }
@@ -115,7 +112,6 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ... (début du build, audioPlayerService, interactionProvider, etc. - code inchangé)
     final audioPlayerService = Provider.of<AudioPlayerService>(context);
     final interactionProvider = Provider.of<InteractionProvider>(context);
 
@@ -131,16 +127,15 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
     final String coverImageUrl = '${API_BASE_URL}/api/songs/${widget.song.id}/cover';
 
     int displayCommentCount = interactionProvider.isLoadingComments && interactionProvider.comments.isEmpty
-        ? widget.song.commentCount
-        : interactionProvider.comments.length;
+        ? widget.song.commentCount // Fallback to initial count if loading and no comments fetched yet
+        : interactionProvider.comments.length; // Use actual fetched comments length
 
     return Scaffold(
       body: CustomScrollView(
         controller: _scrollController,
         slivers: <Widget>[
           SliverAppBar(
-            // ... (configuration du SliverAppBar - code inchangé)
-            expandedHeight: MediaQuery.of(context).size.width * 0.75,
+            expandedHeight: MediaQuery.of(context).size.width * 0.75, // Responsive height
             pinned: true,
             floating: false,
             elevation: 2.0,
@@ -160,7 +155,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
-              centerTitle: true,
+              centerTitle: true, // Centre le titre
               background: Hero(
                 tag: 'song_cover_${widget.song.id}',
                 child: Container(
@@ -168,15 +163,16 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                     image: DecorationImage(
                       image: NetworkImage(coverImageUrl),
                       fit: BoxFit.cover,
+                      // Optional: Add a slight darken overlay for better title visibility
                       colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.darken),
                     ),
                   ),
-                  child: Image.network(
+                  child: Image.network( // Redundant if BoxDecoration.image is set, but kept for errorBuilder
                     coverImageUrl,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
-                        color: Colors.grey[350],
+                        color: Colors.grey[350], // Placeholder color
                         child: Icon(Icons.music_note_rounded, size: 100, color: Colors.grey[600]),
                       );
                     },
@@ -212,7 +208,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                       const SizedBox(height: 24),
 
                       const Divider(thickness: 1),
-                      Theme(
+                      Theme( // Remove divider from ExpansionTile itself
                         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                         child: ExpansionTile(
                           key: _commentsExpansionTileKey,
@@ -227,6 +223,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                           initiallyExpanded: widget.focusComments,
                           onExpansionChanged: (bool expanding) {
                             if (expanding) {
+                              // Delay scroll to allow tile to expand
                               Future.delayed(const Duration(milliseconds: 250), () {
                                 if (mounted) _scrollToSection(_commentsExpansionTileKey);
                               });
@@ -260,11 +257,11 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
   }
 
   Widget _buildSongInfoCard(Song song) {
-    // ... (code inchangé)
     return Card(
-      elevation: 0.5,
+      elevation: 0.5, // Subtile elevation
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8.0),
+        // side: BorderSide(color: Colors.grey.shade300, width: 0.5), // Optional border
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -274,7 +271,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             if (song.album != null && song.album!.isNotEmpty)
               _buildInfoRow(Icons.album_outlined, 'Album', song.album!),
             _buildInfoRow(Icons.category_outlined, 'Genre', song.genre),
-            if (song.createdAt != null)
+            if (song.createdAt != null) // Using createdAt as publication date on platform
               _buildInfoRow(Icons.calendar_today_outlined, 'Publié le', song.formattedPublicationDate),
             if (song.duration != null && song.duration! > 0)
               _buildInfoRow(Icons.timer_outlined, 'Durée', song.formattedDuration),
@@ -287,7 +284,6 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
   }
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
-    // ... (code inchangé)
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -302,16 +298,14 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title, {required Key key}) {
-    // ... (code inchangé)
     return Padding(
       key: key,
-      padding: const EdgeInsets.only(top: 16.0, bottom: 10.0),
+      padding: const EdgeInsets.only(top: 16.0, bottom: 10.0), // Adjusted padding
       child: Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
     );
   }
 
   Widget _buildPlayerControls(BuildContext context, AudioPlayerService audioPlayerService, bool isPlaying, bool isPaused, bool isThisSongLoaded) {
-    // ... (code inchangé)
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
@@ -319,11 +313,12 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             icon: const Icon(Icons.skip_previous_rounded, size: 38),
             tooltip: 'Précédent',
             onPressed: () {
+              // TODO: Implement skip previous functionality
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Fonctionnalité "Précédent" à implémenter')),
               );
             }),
-        if (audioPlayerService.isLoading && isThisSongLoaded)
+        if (audioPlayerService.isLoading && isThisSongLoaded) // Show loader only if this specific song is loading
           const SizedBox(width: 60, height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 3)))
         else
           IconButton(
@@ -336,9 +331,9 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             onPressed: () {
               if (isPlaying) {
                 audioPlayerService.pause();
-              } else if (isPaused && isThisSongLoaded) {
+              } else if (isPaused && isThisSongLoaded) { // Resume if paused on this song
                 audioPlayerService.resume();
-              } else {
+              } else { // Play (or replay/restart if it's this song but stopped, or play different song)
                 audioPlayerService.play(widget.song);
               }
             },
@@ -347,6 +342,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             icon: const Icon(Icons.skip_next_rounded, size: 38),
             tooltip: 'Suivant',
             onPressed: () {
+              // TODO: Implement skip next functionality
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Fonctionnalité "Suivant" à implémenter')),
               );
@@ -356,31 +352,15 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
   }
 
   Widget _buildProgressSlider(BuildContext context, AudioPlayerService audioPlayerService, bool isThisSongLoaded) {
+    // The if(false) block was removed as it was dead code.
+    // The logic below handles displaying the slider or a progress indicator.
 
-    if (false) { // Correction de la variable
-      return Column(
-        children: [
-          Slider(value: 0, min: 0, max: 1, onChanged: null, activeColor: Colors.grey[400], inactiveColor: Colors.grey[300]),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(formatDuration(Duration.zero), style: Theme.of(context).textTheme.bodySmall),
-                Text(widget.song.formattedDuration, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
-    final double currentMs = audioPlayerService.currentPosition.inMilliseconds.toDouble();
-    final double totalMs = audioPlayerService.totalDuration.inMilliseconds.toDouble();
+    final double currentMs = isThisSongLoaded ? audioPlayerService.currentPosition.inMilliseconds.toDouble() : 0.0;
+    final double totalMs = isThisSongLoaded ? audioPlayerService.totalDuration.inMilliseconds.toDouble() : 0.0;
 
     return Column(
       children: [
-        if (totalMs > 0)
+        if (isThisSongLoaded && totalMs > 0) // Show slider if this song is loaded and has a duration
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 3.0,
@@ -391,19 +371,20 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
               thumbColor: Theme.of(context).primaryColor,
             ),
             child: Slider(
-              value: currentMs.clamp(0.0, totalMs.isFinite && totalMs > 0 ? totalMs : 1.0),
+              value: currentMs.clamp(0.0, totalMs), // totalMs is guaranteed > 0 here
               min: 0.0,
-              max: totalMs.isFinite && totalMs > 0 ? totalMs : 1.0,
+              max: totalMs,
               onChanged: (value) {
                 final position = Duration(milliseconds: value.toInt());
                 audioPlayerService.seek(position);
               },
             ),
           )
-        else
+        else // Show a generic progress indicator or disabled slider if not this song, or no duration
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14.0),
+            padding: const EdgeInsets.symmetric(vertical: 14.0), // Approximate height of Slider
             child: LinearProgressIndicator(
+              value: (isThisSongLoaded && audioPlayerService.isLoading) ? null : 0, // Indeterminate if loading this song
               valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor.withOpacity(0.5)),
               backgroundColor: Colors.grey[300],
             ),
@@ -413,8 +394,8 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(formatDuration(audioPlayerService.currentPosition), style: Theme.of(context).textTheme.bodySmall),
-              Text(formatDuration(audioPlayerService.totalDuration), style: Theme.of(context).textTheme.bodySmall),
+              Text(isThisSongLoaded ? formatDuration(audioPlayerService.currentPosition) : formatDuration(Duration.zero), style: Theme.of(context).textTheme.bodySmall),
+              Text(isThisSongLoaded ? formatDuration(audioPlayerService.totalDuration) : widget.song.formattedDuration, style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         ),
@@ -445,27 +426,24 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       ));
     }
 
-    // Afficher les recommandations horizontalement ou verticalement
-    // Ici, un ListView horizontal simple
     return SizedBox(
-      height: 180, // Hauteur fixe pour la liste horizontale, ajustez selon le contenu de SongListItemWidget
+      height: 180, // Hauteur fixe pour la liste horizontale
       child: ListView.builder(
         key: const PageStorageKey<String>('recommendationsList'), // Pour la mémorisation du scroll
         scrollDirection: Axis.horizontal,
         itemCount: _recommendedSongs.length,
         itemBuilder: (ctx, index) {
           final recommendedSong = _recommendedSongs[index];
-          // Vous pourriez vouloir un widget plus petit/différent pour les recommandations
-          // Pour l'instant, on réutilise une version modifiée de SongListItemWidget ou un nouveau widget.
-          // Par simplicité, créons un simple affichage ici:
+          final String recommendedCoverImageUrl = '${API_BASE_URL}/api/songs/${recommendedSong.id}/cover';
+
           return SizedBox( // Donner une largeur fixe aux items pour le scroll horizontal
             width: MediaQuery.of(context).size.width * 0.4, // 40% de la largeur de l'écran
             child: Card(
               margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              clipBehavior: Clip.antiAlias, // Pour que le borderRadius du Card affecte l'image
               child: InkWell(
                 onTap: () {
                   // Naviguer vers les détails de la chanson recommandée
-                  // Utiliser pushReplacement si on ne veut pas empiler les écrans de détail
                   Navigator.of(context).pushReplacement(MaterialPageRoute(
                     builder: (context) => SongDetailScreen(song: recommendedSong),
                   ));
@@ -474,18 +452,13 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded( // Pour que l'image prenne la hauteur disponible
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(4)),
-                          image: DecorationImage(
-                            image: NetworkImage('${API_BASE_URL}/api/songs/${recommendedSong.id}/cover'),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        child: Image.network(
-                          '${API_BASE_URL}/api/songs/${recommendedSong.id}/cover',
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.music_note),
+                      child: Image.network(
+                        recommendedCoverImageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity, // Assure que l'image remplit la largeur
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.grey[200],
+                          child: Center(child: Icon(Icons.music_note_rounded, color: Colors.grey[500], size: 40)),
                         ),
                       ),
                     ),
@@ -499,7 +472,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                      padding: const EdgeInsets.only(left: 6.0, right: 6.0, bottom: 6.0, top: 2.0),
                       child: Text(
                         recommendedSong.artist,
                         style: Theme.of(context).textTheme.bodySmall,
