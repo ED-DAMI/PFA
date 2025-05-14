@@ -2,88 +2,108 @@ import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
-import 'app.dart'; // Assurez-vous que ce fichier existe et contient MyApp
+import 'app.dart';
 import 'services/ApiService.dart';
 import 'services/audio_player_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/song_provider.dart';
 import 'providers/interaction_provider.dart';
+import 'providers/history_provider.dart';   // <-- IMPORTER HISTORY_PROVIDER
+import 'providers/playlist_provider.dart'; // <-- IMPORTER PLAYLIST_PROVIDER
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ✅ Initialiser les données de formatage pour 'fr_FR'
   await initializeDateFormatting('fr_FR', null);
-
-
 
   runApp(
     MultiProvider(
       providers: [
-        // 1. Fournir ApiService. Il est généralement indépendant.
-        // Puisque ApiService n'est pas un ChangeNotifier, utilisez Provider.
+        // 1. ApiService
         Provider<ApiService>(
-          create: (_) => ApiService(), // Crée une nouvelle instance ici ou utilise celle ci-dessus
+          create: (_) => ApiService(),
         ),
 
-        // 2. Fournir AudioPlayerService.
-        // Si AudioPlayerService est un ChangeNotifier, utilisez ChangeNotifierProvider.
-        // S'il n'est pas un ChangeNotifier mais a une méthode dispose(), utilisez Provider avec dispose.
-        // S'il est un ChangeNotifier et vous avez déjà une instance:
+        // 2. AudioPlayerService
         ChangeNotifierProvider<AudioPlayerService>(
-          create: (_) => AudioPlayerService(), // Crée une nouvelle instance ou:
-          // value: audioPlayerService, // Si vous avez créé `audioPlayerService` plus haut et voulez utiliser cette instance
+          create: (_) => AudioPlayerService(),
         ),
-        // Ou si ce n'est PAS un ChangeNotifier mais a une méthode dispose :
-        // Provider<AudioPlayerService>(
-        //   create: (_) => AudioPlayerService(), // ou `create: (_) => audioPlayerService,`
-        //   dispose: (_, service) => service.dispose(),
-        // ),
 
-
-        // 3. AuthProvider dépend d'ApiService.
+        // 3. AuthProvider (dépend d'ApiService)
         ChangeNotifierProvider<AuthProvider>(
-          // Utilise Provider.of pour obtenir l'instance d'ApiService fournie ci-dessus.
           create: (ctx) => AuthProvider(Provider.of<ApiService>(ctx, listen: false)),
         ),
 
-        // 4. SongProvider dépend d'ApiService et AuthProvider.
+        // 4. SongProvider (dépend d'ApiService et AuthProvider)
         ChangeNotifierProxyProvider<AuthProvider, SongProvider>(
           create: (ctx) => SongProvider(
             Provider.of<ApiService>(ctx, listen: false),
-            Provider.of<AuthProvider>(ctx, listen: false),
+            Provider.of<AuthProvider>(ctx, listen: false), // AuthProvider initial
           ),
-          update: (ctx, authProvider, previousSongProvider) {
-            previousSongProvider?.updateAuthProvider(authProvider);
-            // Il est important de recréer avec le nouveau authProvider si previous est null
-            // ou de mettre à jour l'existant.
+          update: (ctx, auth, previousSongProvider) {
+            // Assurez-vous que SongProvider a une méthode updateAuthProvider
+            previousSongProvider?.updateAuthProvider(auth);
             return previousSongProvider ?? SongProvider(
                 Provider.of<ApiService>(ctx, listen: false),
-                authProvider
+                auth
             );
           },
         ),
 
-        // 5. InteractionProvider dépend d'ApiService, AuthProvider, et potentiellement SongProvider.
-        // J'ajoute SongProvider comme dépendance au cas où vous en auriez besoin.
+        // 5. InteractionProvider (dépend d'ApiService, AuthProvider, SongProvider)
         ChangeNotifierProxyProvider2<AuthProvider, SongProvider, InteractionProvider>(
           create: (ctx) => InteractionProvider(
             Provider.of<ApiService>(ctx, listen: false),
             Provider.of<AuthProvider>(ctx, listen: false),
-            Provider.of<SongProvider>(ctx, listen: false), // Ajouté ici
+            Provider.of<SongProvider>(ctx, listen: false),
           ),
-          update: (ctx, authProvider, songProvider, previousInteractionProvider) {
-            previousInteractionProvider?.updateAuthProvider(authProvider);
-            // Mettre à jour/recréer InteractionProvider
+          update: (ctx, auth, song, previousInteractionProvider) {
+            // Assurez-vous qu'InteractionProvider a une méthode updateAuthProvider
+            // et potentiellement updateSongProvider si nécessaire
+            previousInteractionProvider?.updateAuthProvider(auth);
+            // previousInteractionProvider?.updateSongProvider(song);
             return previousInteractionProvider ?? InteractionProvider(
               Provider.of<ApiService>(ctx, listen: false),
-              authProvider,
-              songProvider, // Ajouté ici
+              auth,
+              song,
             );
           },
         ),
+
+        // --- AJOUT DE HISTORY_PROVIDER ET PLAYLIST_PROVIDER ---
+        // 6. HistoryProvider (dépend d'ApiService et AuthProvider)
+        ChangeNotifierProxyProvider<AuthProvider, HistoryProvider>(
+          create: (ctx) => HistoryProvider(
+            Provider.of<ApiService>(ctx, listen: false),
+            Provider.of<AuthProvider>(ctx, listen: false), // AuthProvider initial
+          ),
+          update: (ctx, auth, previousHistoryProvider) {
+            // HistoryProvider a déjà une méthode updateAuthProvider
+            previousHistoryProvider?.updateAuthProvider(auth);
+            return previousHistoryProvider ?? HistoryProvider(
+              Provider.of<ApiService>(ctx, listen: false),
+              auth,
+            );
+          },
+        ),
+
+        // 7. PlaylistProvider (dépend d'ApiService et AuthProvider)
+        ChangeNotifierProxyProvider<AuthProvider, PlaylistProvider>(
+          create: (ctx) => PlaylistProvider(
+            Provider.of<ApiService>(ctx, listen: false),
+            Provider.of<AuthProvider>(ctx, listen: false), // AuthProvider initial
+          ),
+          update: (ctx, auth, previousPlaylistProvider) {
+            // Assurez-vous que PlaylistProvider a une méthode updateAuthProvider
+            previousPlaylistProvider?.updateAuthProvider(auth);
+            return previousPlaylistProvider ?? PlaylistProvider(
+              Provider.of<ApiService>(ctx, listen: false),
+              auth,
+            );
+          },
+        ),
+        // --- FIN DE L'AJOUT ---
       ],
-      child: const MyApp(), // Assurez-vous que MyApp est défini dans app.dart
+      child: const MyApp(),
     ),
   );
 }

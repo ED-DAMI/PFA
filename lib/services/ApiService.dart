@@ -7,8 +7,9 @@ import 'package:http_parser/http_parser.dart'; // Pour MediaType (upload)
 
 // Assurez-vous que ces chemins sont corrects
 import '../config/api_config.dart'; // Votre URL de base
+
 import '../models/comment.dart';
-// import '../models/playlist.dart'; // Doit contenir Playlist.fromJson // Commenté car non utilisé actuellement
+import '../models/playlist.dart'; // Doit contenir Playlist.fromJson // Commenté car non utilisé actuellement
 import '../models/reaction.dart';
 import '../models/song.dart';
 import '../models/tag.dart';     // Doit contenir Song.fromJson
@@ -27,7 +28,6 @@ class ApiService {
       print("API Request URL: ${response.request?.url}");
       print("API Request Method: ${response.request?.method}");
     }
-
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty || response.statusCode == 204) {
@@ -355,6 +355,23 @@ class ApiService {
     }
   }
 
+
+  Future<void> IncrmentView(String songId, {required String authToken}) async {
+
+    if (kDebugMode) print("ApiService: Increment view - SongID: $songId");
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/songs/$songId/view'),
+        headers: _getHeaders(authToken: authToken), // isJsonContent: true par défaut
+
+      ).timeout(const Duration(seconds: 15));
+      final jsonResponse = _handleResponse(response);
+    } catch (e) {
+      if (kDebugMode) print("Erreur postComment: $e");
+      throw Exception("Impossible de poster le commentaire: ${e.toString()}");
+    }
+  }
+
   // --- Reactions ---
   Future<List<Reaction>> fetchReactions(String songId, {String? authToken}) async {
     if (kDebugMode) print("ApiService: fetchReactions - SongID: $songId");
@@ -393,16 +410,16 @@ class ApiService {
     }
   }
 
-  Future<bool> deleteReaction(String reactionId, {required String authToken}) async {
-    if (kDebugMode) print("ApiService: deleteReaction - ReactionID: $reactionId");
+  Future<bool> deleteReaction(String songId, String token) async {
+    if (kDebugMode) print("ApiService: deleteReaction - songId: $songId");
     // L'endpoint pour supprimer une réaction spécifique est généralement /api/reactions/{reactionId}
     // et non lié à songId directement, car reactionId devrait être unique.
     // Adaptez si votre API est structurée différemment (ex: /api/songs/{songId}/reactions/{reactionId}).
     // Ici, je suppose un endpoint direct pour la suppression de réaction.
     try {
       final response = await http.delete(
-        Uri.parse('$_baseUrl/api/reactions/$reactionId'), // Endpoint supposé
-        headers: _getHeaders(authToken: authToken, isJsonContent: false),
+        Uri.parse('$_baseUrl/api/reactions/$songId'), // Endpoint supposé
+        headers: _getHeaders(authToken: token! , isJsonContent: false),
       ).timeout(const Duration(seconds: 15));
 
       _handleResponse(response); // Vérifie si la réponse est 200-204 (succès)
@@ -412,7 +429,7 @@ class ApiService {
       // Dans les deux cas, si aucune exception n'est levée, c'est un succès.
       return true;
     } catch (e) {
-      if (kDebugMode) print("Erreur lors de la suppression de la réaction $reactionId: $e");
+      if (kDebugMode) print("Erreur lors de la suppression de la réaction $songId: $e");
       throw Exception("Impossible de supprimer la réaction: ${e.toString()}");
     }
   }
@@ -452,6 +469,132 @@ class ApiService {
         print('ApiService: Error fetching recommended songs: $e');
       }
       throw Exception('Erreur lors de la récupération des recommandations: $e');
+    }
+  }
+  Future<bool> deleteReactionByEmoji(String songId, String emoji, {required String authToken}) async {
+    if (kDebugMode) print("ApiService: deleteReactionByEmoji - SongID: $songId, Emoji: $emoji");
+
+    // L'URL de l'endpoint dépend de votre API. Exemples :
+    // 1. DELETE /api/songs/{songId}/reactions/{emoji} (si l'emoji est un identifiant dans l'URL)
+    //    final url = Uri.parse('$_baseUrl/api/songs/$songId/reactions/$emoji');
+    // 2. DELETE /api/reactions?songId={songId}&emoji={emoji} (emoji en query param)
+    //    final url = Uri.parse('$_baseUrl/api/reactions').replace(queryParameters: {'songId': songId, 'emoji': emoji});
+    // 3. DELETE /api/reactions/{songId} avec l'emoji dans le body (moins courant pour DELETE)
+    //    final url = Uri.parse('$_baseUrl/api/reactions/$songId');
+    //    final body = jsonEncode({'emoji': emoji});
+
+    // Je vais supposer un endpoint comme le n°1 pour l'exemple :
+    final url = Uri.parse('$_baseUrl/api/songs/$songId/reactions/$emoji');
+    // Si l'emoji contient des caractères spéciaux, il faudrait l'encoder pour l'URL :
+    // final encodedEmoji = Uri.encodeComponent(emoji);
+    // final url = Uri.parse('$_baseUrl/api/songs/$songId/reactions/$encodedEmoji');
+
+
+    try {
+      final response = await http.delete(
+        url,
+        headers: _getHeaders(authToken: authToken, isJsonContent: false), // Pas de corps JSON pour DELETE simple
+        // body: body, // Si l'option 3 est utilisée
+      ).timeout(const Duration(seconds: 15));
+
+      _handleResponse(response); // Gère les codes de statut (200, 204 pour succès)
+      return true; // Succès si _handleResponse ne lève pas d'exception
+    } catch (e) {
+      if (kDebugMode) print("Erreur deleteReactionByEmoji: $e");
+      throw Exception("Impossible de supprimer la réaction: ${e.toString()}");
+    }
+  }
+
+  Future<List<Playlist>> fetchUserPlaylists({required String authToken}) async { // Modèle Playlist nécessaire
+    if (kDebugMode) print("ApiService: fetchUserPlaylists");
+    try {
+      final response = await http.get(
+          Uri.parse('$_baseUrl/api/playlists/me'), // Endpoint pour les playlists de l'utilisateur connecté
+          headers: _getHeaders(authToken: authToken, isJsonContent: false)
+      ).timeout(const Duration(seconds: 20));
+      final jsonResponse = _handleResponse(response);
+      if (jsonResponse == null || jsonResponse is! List) return [];
+      // Assurez-vous d'avoir Playlist.fromJson(data) dans votre modèle Playlist
+      return (jsonResponse as List<dynamic>).map((data) => Playlist.fromJson(data)).toList();
+    } catch (e) {
+      if (kDebugMode) print("Erreur récupération playlists utilisateur: $e");
+      throw Exception("Impossible de charger vos playlists: ${e.toString()}");
+    }
+  }
+
+  Future<Playlist?> createPlaylist({
+    required String name,
+    String? description,
+    bool isPublic = true, // Exemple de paramètre additionnel
+    required String authToken
+  }) async {
+    if (kDebugMode) print("ApiService: createPlaylist - Name: $name");
+    try {
+      final body = <String, dynamic>{
+        'name': name,
+        'isPublic': isPublic,
+      };
+      if (description != null && description.isNotEmpty) {
+        body['description'] = description;
+      }else
+        body['description']="vide";
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/playlists'),
+        headers: _getHeaders(authToken: authToken), // isJsonContent: true par défaut
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 15));
+      final jsonResponse = _handleResponse(response);
+      if (jsonResponse == null) return null;
+      return Playlist.fromJson(jsonResponse); // Modèle Playlist nécessaire
+    } catch (e) {
+      if (kDebugMode) print("Erreur création playlist: $e");
+      throw Exception("Impossible de créer la playlist: ${e.toString()}");
+    }
+  }
+
+  Future<bool> addSongToPlaylist(String playlistId, String songId, {required String authToken}) async {
+    if (kDebugMode) print("ApiService: addSongToPlaylist - PlaylistID: $playlistId, SongID: $songId");
+    try {
+      // L'API peut attendre un corps vide, ou un corps avec songId, ou l'ID dans l'URL
+      // Exemple : POST /api/playlists/{playlistId}/songs/{songId}
+      // Ou : POST /api/playlists/{playlistId}/songs avec body: {'songId': songId}
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/playlists/$playlistId/songs'), // Endpoint exemple
+        headers: _getHeaders(authToken: authToken),
+        body: jsonEncode({'songId': songId}),
+      ).timeout(const Duration(seconds: 15));
+      _handleResponse(response); // Vérifie succès (200-201), sinon lève exception
+      return true;
+    } catch (e) {
+      if (kDebugMode) print("Erreur ajout chanson à playlist: $e");
+      throw Exception("Impossible d'ajouter la chanson à la playlist: ${e.toString()}");
+    }
+  }
+  // Potentiellement d'autres méthodes pour les playlists : deletePlaylist, removeSongFromPlaylist, fetchPlaylistById
+
+  // --- Historique d'écoute (User History) ---
+  Future<List<Song>> fetchUserHistory({required String authToken}) async {
+    if (kDebugMode) print("ApiService: fetchUserHistory");
+    try {
+      final response = await http.get(
+          Uri.parse('$_baseUrl/api/users/history'), // Endpoint pour l'historique de l'utilisateur connecté
+          headers: _getHeaders(authToken: authToken, isJsonContent: false)
+      ).timeout(const Duration(seconds: 20));
+      final jsonResponse = _handleResponse(response);
+      if (jsonResponse == null || jsonResponse is! List) return [];
+      // L'historique retourne souvent des objets Song directement, ou des objets "HistoryEntry"
+      // qui contiennent une chanson. Adaptez Song.fromJson si nécessaire.
+      return (jsonResponse as List<dynamic>).map((data) {
+        // Si l'API retourne un objet HistoryEntry qui a un champ 'song' :
+        // if (data is Map<String, dynamic> && data.containsKey('song')) {
+        //   return Song.fromJson(data['song']);
+        // }
+        return Song.fromJson(data); // Si l'API retourne directement des chansons
+      }).toList();
+    } catch (e) {
+      if (kDebugMode) print("Erreur récupération historique utilisateur: $e");
+      throw Exception("Impossible de charger votre historique: ${e.toString()}");
     }
   }
 }

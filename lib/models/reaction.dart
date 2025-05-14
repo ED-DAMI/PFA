@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart'; // Pour kDebugMode
 class Reaction {
   final String id;
   final String songId; // Peut être nullable si une réaction n'est pas toujours liée à une chanson
-  final String reactorName;
+  final String reactorId;
   final String emoji; // Contiendra le symbole emoji (ex: "❤️")
   final DateTime createdAt;
 
@@ -22,8 +22,8 @@ class Reaction {
   Reaction({
     required this.id,
     required this.songId,
-    required this.reactorName,
-    required this.emoji, // Doit être le symbole emoji
+    required this.reactorId,
+    required this.emoji,
     required this.createdAt,
   });
 
@@ -72,7 +72,7 @@ class Reaction {
     return Reaction(
       id: json['id']?.toString() ?? 'error_id_${DateTime.now().millisecondsSinceEpoch}', // ID unique en cas d'erreur
       songId: json['songId']?.toString() ?? '',
-      reactorName: json['reactorName']?.toString() ?? 'Unknown',
+      reactorId: json['reactorId']?.toString() ?? 'dami',
       emoji: displayEmojiSymbol,
       createdAt: createdAt,
     );

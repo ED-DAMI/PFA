@@ -1,354 +1,273 @@
 // lib/providers/interaction_provider.dart
 import 'package:flutter/foundation.dart';
-import 'package:collection/collection.dart';
-
 import '../models/comment.dart';
 import '../models/reaction.dart';
-import '../models/user.dart';
 import '../services/ApiService.dart';
-import 'auth_provider.dart';
-import 'song_provider.dart'; // Pour potentiellement notifier des changements de compteurs
+import './auth_provider.dart';
+import './song_provider.dart';
 
 class InteractionProvider with ChangeNotifier {
   final ApiService _apiService;
   AuthProvider _authProvider;
-  final SongProvider? _songProvider; // Optionnel, pour mettre à jour les compteurs de chansons
+  SongProvider? _songProvider;
 
   String? _currentSongId;
-  List<Comment> _comments = [];
-  Map<String, int> _reactionCounts = {}; // emoji -> count
-  List<Reaction> _currentUserReactionsForCurrentSong = []; // Réactions de l'utilisateur actuel pour la chanson courante
+  Map<String, int> _reactionCounts = {};
+  String? _currentUserReactionEmoji; // Stocke L'UNIQUE emoji de l'utilisateur actuel
 
-  bool _isInitialized = false; // Pour savoir si les données pour _currentSongId ont été chargées
-  bool _isLoadingComments = false;
+  List<Comment> _comments = [];
+
   bool _isLoadingReactions = false;
-  bool _isPostingComment = false;
-  bool _isPostingReaction = false;
+  bool _isLoadingComments = false;
   String? _error;
 
-  InteractionProvider(this._apiService, AuthProvider initialAuthProvider, [this._songProvider])
-      : _authProvider = initialAuthProvider;
+  bool _isReactionsInitializedForCurrentSong = false;
+  bool _isCommentsInitializedForCurrentSong = false;
 
-  // --- Getters ---
-  List<Comment> get comments => _comments;
-  Map<String, int> get reactionCounts => _reactionCounts; // Total counts for each emoji
-  int get totalReactionCountForCurrentSong => _reactionCounts.values.fold(0, (sum, count) => sum + count);
+  InteractionProvider(this._apiService, this._authProvider, [this._songProvider]);
+
   String? get currentSongId => _currentSongId;
-  bool get isLoadingComments => _isLoadingComments;
+  Map<String, int> get reactionCounts => Map.unmodifiable(_reactionCounts);
+  List<Comment> get comments => List.unmodifiable(_comments);
   bool get isLoadingReactions => _isLoadingReactions;
-  bool get isPostingComment => _isPostingComment;
-  bool get isPostingReaction => _isPostingReaction;
-  bool get isInitialized => _isInitialized;
-  bool get isLoading => _isLoadingComments || _isLoadingReactions;
+  bool get isLoadingComments => _isLoadingComments;
   String? get error => _error;
-  User? get currentUser => _authProvider.currentUser;
-  bool get isAuthenticated => _authProvider.isAuthenticated;
+
+  bool hasUserReactedWith(String emoji) => _currentUserReactionEmoji == emoji;
+
+  bool get isReactionsInitializedForCurrentSong => _isReactionsInitializedForCurrentSong;
+  bool get isCommentsInitializedForCurrentSong => _isCommentsInitializedForCurrentSong;
+
+  String? get currentUserReactionEmoji => _currentUserReactionEmoji;
+
+  bool isInitializedForSong(String songId) {
+    return _currentSongId == songId &&
+        _isReactionsInitializedForCurrentSong &&
+        _isCommentsInitializedForCurrentSong;
+  }
 
   void updateAuthProvider(AuthProvider newAuthProvider) {
-    bool authSignificantlyChanged = (_authProvider.isAuthenticated != newAuthProvider.isAuthenticated) ||
-        (_authProvider.currentUser?.id != newAuthProvider.currentUser?.id);
-
-    _authProvider = newAuthProvider;
-
-    if (authSignificantlyChanged) {
-      if (kDebugMode) print("InteractionProvider: Auth state changed. Clearing user-specific interaction data if a song is set.");
+    if (_authProvider.token != newAuthProvider.token || _authProvider.currentUser?.id != newAuthProvider.currentUser?.id) {
+      _authProvider = newAuthProvider;
       if (_currentSongId != null) {
-        // Rafraîchir les données d'interaction pour refléter le nouvel utilisateur
-        setSongId(_currentSongId!, forceRefresh: true);
-      } else {
-        _currentUserReactionsForCurrentSong = [];
-        notifyListeners(); // Notifier au cas où l'UI dépend de _currentUserReactionsForCurrentSong
+        _isReactionsInitializedForCurrentSong = false;
+        _currentUserReactionEmoji = null;
       }
     }
   }
 
-  void setSongId(String songId, {bool forceRefresh = false}) {
-    if (_currentSongId != songId || forceRefresh || !_isInitialized) {
-      if (kDebugMode) print("InteractionProvider: Setting song ID to '$songId'. Force refresh: $forceRefresh, Was Initialized: $_isInitialized");
-      _currentSongId = songId;
-      _comments = [];
-      _reactionCounts = {};
-      _currentUserReactionsForCurrentSong = [];
-      _error = null;
-      _isInitialized = false; // Marquer comme non initialisé pour ce songId
-      notifyListeners(); // Notifier le changement de songId et le reset des données
-      _fetchInteractionsForSong(songId);
-    }
-  }
-
-  Future<void> _fetchInteractionsForSong(String songId) async {
-    if (songId.isEmpty) {
-      _isInitialized = true; // Pas d'interactions à charger pour un songId vide
-      notifyListeners();
+  Future<void> setSongId(String? newSongId, {bool forceRefresh = false}) async {
+    if (_currentSongId == newSongId && !forceRefresh && (newSongId != null && isInitializedForSong(newSongId))) {
       return;
     }
-    _error = null;
-    _isLoadingComments = true;
-    _isLoadingReactions = true;
-    notifyListeners(); // Notifier le début du chargement
+    final songChanged = _currentSongId != newSongId;
+    _currentSongId = newSongId;
 
-    try {
-      // Fetch reactions first (pour _currentUserReactionsForCurrentSong), then comments
-      // L'ordre peut importer si l'un dépend de l'autre, ici ils sont indépendants
-      await fetchReactionsForSong(songId, triggeredBySetSongId: true);
-      await fetchCommentsForSong(songId, triggeredBySetSongId: true);
-      _isInitialized = true; // Marquer comme initialisé après succès
-      if (kDebugMode) print("InteractionProvider: Interactions fetched for $songId");
-    } catch (e) {
-      if (kDebugMode) print("InteractionProvider: Error during combined fetch for $songId: $e");
-      _error = "Erreur de chargement des interactions.";
-      _isInitialized = false; // Échec de l'initialisation
-    } finally {
-      // Les états _isLoadingComments et _isLoadingReactions sont déjà mis à false dans leurs méthodes respectives
-      // S'assurer qu'ils sont bien false si l'appel combiné échoue avant qu'ils ne soient appelés
-      _isLoadingComments = false;
+    if (songChanged || forceRefresh) {
+      _reactionCounts = {};
+      _currentUserReactionEmoji = null;
+      _comments = [];
+      _isReactionsInitializedForCurrentSong = false;
+      _isCommentsInitializedForCurrentSong = false;
+      _error = null;
+    }
+    notifyListeners();
+
+    if (_currentSongId != null) {
+      await Future.wait([fetchReactions(), fetchComments()]);
+    } else {
       _isLoadingReactions = false;
-      notifyListeners(); // Notifier la fin du chargement et l'état d'initialisation
+      _isLoadingComments = false;
     }
   }
 
-  Future<void> fetchCommentsForSong(String songId, {bool triggeredBySetSongId = false}) async {
-    if (!triggeredBySetSongId) { // Si appelé directement et non par _fetchInteractionsForSong
-      if (songId.isEmpty || _currentSongId != songId) return; // Sécurité
-      _isLoadingComments = true;
-      notifyListeners();
-    }
+  Future<void> fetchReactions() async {
+    if (_currentSongId == null) return;
+    if (_isLoadingReactions && _currentSongId == _currentSongId) return;
+
+    _isLoadingReactions = true;
+    notifyListeners();
+
     try {
-      _comments = await _apiService.fetchComments(songId, authToken: _authProvider.token);
-      if (kDebugMode) print("InteractionProvider: Fetched ${_comments.length} comments for song $songId");
-      _songProvider?.updateSongInteractionCounts(songId, newCommentCount: _comments.length);
-    } catch (e) {
-      if (kDebugMode) print("InteractionProvider: Error fetching comments for $songId: $e");
-      _error = _error ?? "Erreur chargement commentaires: ${e.toString()}"; // Ne pas écraser une erreur de réactions
-      _comments = []; // Réinitialiser en cas d'erreur
-    } finally {
-      if (!triggeredBySetSongId) {
-        _isLoadingComments = false;
-        notifyListeners();
-      } else {
-        _isLoadingComments = false; // Toujours mettre à false
-      }
-    }
-  }
+      final fetchedReactionsFromApi = await _apiService.fetchReactions(_currentSongId!, authToken: _authProvider.token);
 
-  Future<void> fetchReactionsForSong(String songId, {bool triggeredBySetSongId = false}) async {
-    if (!triggeredBySetSongId) {
-      if (songId.isEmpty || _currentSongId != songId) return;
-      _isLoadingReactions = true;
-      notifyListeners();
-    }
-    try {
-      final List<Reaction> allReactions = await _apiService.fetchReactions(songId, authToken: _authProvider.token);
-      _calculateReactionCounts(allReactions);
+      _reactionCounts = {};
+      _currentUserReactionEmoji = null;
+      final String? currentUserId = _authProvider.currentUser?.id;
 
-      _currentUserReactionsForCurrentSong = []; // Réinitialiser
-      if (_authProvider.isAuthenticated && _authProvider.currentUser != null) {
-        // Le nom d'utilisateur de l'API pour les réactions peut être `_authProvider.currentUser!.name` ou `id`
-        // Assurez-vous que `reactorName` (ou quel que soit le champ) correspond
-        final String currentUserName = _authProvider.currentUser!.name; // ou .name, selon ce que l'API attend/retourne
-        _currentUserReactionsForCurrentSong = allReactions.where((r) => r.reactorName == currentUserName).toList();
-
-        if (kDebugMode) {
-          if (_currentUserReactionsForCurrentSong.isNotEmpty) {
-            print("InteractionProvider: User's current reaction for $songId: ${_currentUserReactionsForCurrentSong.first.emoji}");
-          } else {
-            print("InteractionProvider: User has no reaction for $songId");
-          }
+      for (var reaction in fetchedReactionsFromApi) {
+        _reactionCounts[reaction.emoji] = (_reactionCounts[reaction.emoji] ?? 0) + 1;
+        if (reaction.reactorId == currentUserId) {
+          // Si l'API garantit une seule réaction par utilisateur, ceci est correct.
+          _currentUserReactionEmoji = reaction.emoji;
         }
       }
-      if (kDebugMode) print("InteractionProvider: Fetched ${allReactions.length} total reactions for song $songId. Counts: $_reactionCounts");
-      _songProvider?.updateSongInteractionCounts(songId, newReactionCount: totalReactionCountForCurrentSong);
 
+      _isReactionsInitializedForCurrentSong = true;
+      if(!_isLoadingComments) _error = null;
     } catch (e) {
-      if (kDebugMode) print("InteractionProvider: Error fetching reactions for $songId: $e");
-      _error = _error ?? "Erreur chargement réactions: ${e.toString()}";
-      _reactionCounts = {};
-      _currentUserReactionsForCurrentSong = [];
+      _error = "Erreur chargement réactions: ${e.toString()}";
+      _isReactionsInitializedForCurrentSong = false;
     } finally {
-      if (!triggeredBySetSongId) {
-        _isLoadingReactions = false;
-        notifyListeners();
-      } else {
-        _isLoadingReactions = false;
-      }
+      _isLoadingReactions = false;
+      notifyListeners();
     }
   }
 
-  void _calculateReactionCounts(List<Reaction> allReactions) {
-    final counts = <String, int>{};
-    for (var reaction in allReactions) {
-      counts[reaction.emoji] = (counts[reaction.emoji] ?? 0) + 1;
+  Future<void> fetchComments() async {
+    // ... (INCHANGÉ) ...
+    if (_currentSongId == null) return;
+    if (_isLoadingComments && _currentSongId == _currentSongId) return;
+
+    _isLoadingComments = true;
+    notifyListeners();
+
+    try {
+      _comments = await _apiService.fetchComments(_currentSongId!, authToken: _authProvider.token);
+      _isCommentsInitializedForCurrentSong = true;
+      if(!_isLoadingReactions) _error = null;
+    } catch (e) {
+      _error = _error ?? "Erreur chargement commentaires: ${e.toString()}";
+      _isCommentsInitializedForCurrentSong = false;
+    } finally {
+      _isLoadingComments = false;
+      notifyListeners();
     }
-    _reactionCounts = counts;
   }
 
-  bool hasUserReactedWith(String emojiSymbol) {
-    if (!_authProvider.isAuthenticated || _currentUserReactionsForCurrentSong.isEmpty) {
+  Future<bool> toggleReaction(String newEmojiToggled) async {
+    if (_currentSongId == null) {
+      _error = "Aucune chanson sélectionnée.";
+      notifyListeners();
       return false;
     }
-    // Si un utilisateur ne peut avoir qu'une réaction, .first est ok.
-    // S'il peut en avoir plusieurs de types différents (rare), ajuster.
-    return _currentUserReactionsForCurrentSong.any((r) => r.emoji == emojiSymbol);
+    if (!_authProvider.isAuthenticated || _authProvider.token == null) {
+      _error = "Vous devez être connecté pour réagir.";
+      notifyListeners();
+      return false;
+    }
+
+    // Sauvegarder l'état actuel pour un éventuel rollback en cas d'échec de l'API
+    final String? emojiPreviouslySet = _currentUserReactionEmoji;
+    final Map<String, int> countsBeforeOptimisticUpdate = Map.from(_reactionCounts);
+
+    // --- Logique de mise à jour optimiste (pour une interface utilisateur réactive immédiate) ---
+    // Détermine quel sera l'état local après l'action de l'utilisateur, AVANT l'appel API.
+    if (_currentUserReactionEmoji == newEmojiToggled) {
+      // Cas 1: L'utilisateur clique sur l'emoji qui est déjà sa réaction actuelle -> intention de la supprimer
+      _currentUserReactionEmoji = null; // Supprimer localement la réaction de l'utilisateur
+      // Décrémenter le compteur local pour cet emoji
+      _reactionCounts[newEmojiToggled] = (_reactionCounts[newEmojiToggled] ?? 1) - 1;
+      if ((_reactionCounts[newEmojiToggled] ?? 0) <= 0) {
+        _reactionCounts.remove(newEmojiToggled); // Retirer l'emoji si le compte tombe à zéro ou moins
+      }
+    } else {
+      // Cas 2: L'utilisateur clique sur un nouvel emoji (ou n'avait pas de réaction)
+      // -> intention de définir cette nouvelleEmojiToggled comme sa réaction.
+
+      // Si l'utilisateur avait une réaction précédente (un emoji différent), la décrémenter localement.
+      if (_currentUserReactionEmoji != null) {
+        _reactionCounts[_currentUserReactionEmoji!] = (_reactionCounts[_currentUserReactionEmoji!] ?? 1) - 1;
+        if ((_reactionCounts[_currentUserReactionEmoji!] ?? 0) <= 0) {
+          _reactionCounts.remove(_currentUserReactionEmoji!); // Retirer l'ancien emoji si le compte tombe à zéro
+        }
+      }
+      // Définir la nouvelle réaction de l'utilisateur localement
+      _currentUserReactionEmoji = newEmojiToggled;
+      // Incrémenter le compteur local pour la nouvelleEmojiToggled
+      _reactionCounts[newEmojiToggled] = (_reactionCounts[newEmojiToggled] ?? 0) + 1;
+    }
+
+    // Notifier immédiatement les widgets qui écoutent ce provider pour mettre à jour l'interface utilisateur
+    notifyListeners();
+
+    // --- Appel API ---
+    // Tenter d'appliquer le changement sur le serveur.
+    // IMPORTANT: Votre API `postReaction` (ou l'endpoint que vous utilisez ici) doit gérer correctement
+    // le comportement de "set ou unset" pour la réaction unique de l'utilisateur.
+    // C'est-à-dire, si vous envoyez un emoji :
+    // - Si l'utilisateur l'avait déjà, l'API le supprime.
+    // - Si l'utilisateur avait une autre réaction, l'API supprime l'ancienne et ajoute la nouvelle.
+    // - Si l'utilisateur n'avait pas de réaction, l'API l'ajoute.
+    try {
+      // L'appel à l'API demande au serveur de mettre à jour la réaction de l'utilisateur pour cette chanson
+      // en fonction de newEmojiToggled.
+      await _apiService.postReaction(_currentSongId!, newEmojiToggled, authToken: _authProvider.token);
+
+      // --- Synchronisation après l'appel API ---
+      // Après un appel API réussi (que ce soit ajout, suppression ou changement), le moyen le plus fiable
+      // de garantir que l'état local est parfaitement synchronisé avec le serveur est de re-fetcher
+      // toutes les réactions pour cette chanson. `fetchReactions` mettra à jour `_reactionCounts`
+      // et `_currentUserReactionEmoji` avec les données exactes du serveur.
+      await fetchReactions();
+
+      // Optionnel: Notifier SongProvider des changements de compteurs globaux
+      _songProvider?.updateSongInteractionCounts(
+          _currentSongId!,
+          // Recalculer le total à partir des données fraîchement fetchées par fetchReactions
+          newReactionCount: _reactionCounts.values.fold(0, (sum, item) => sum! + item)
+      );
+
+      _error = null; // Effacer toute erreur précédente si l'opération réussit
+      // Remarque: fetchReactions() aura déjà appelé notifyListeners(), donc un autre appel ici n'est
+      // généralement pas nécessaire si l'opération réussit sans erreur intermédiaire.
+      return true;
+
+    } catch (e) {
+      // --- Gestion de l'erreur et Rollback ---
+      // Si l'appel API échoue, afficher une erreur et annuler les changements optimistes dans l'UI.
+      _error = "Erreur lors de la mise à jour de la réaction: ${e.toString()}";
+
+      // Restaurer l'état précédent des compteurs et de la réaction de l'utilisateur.
+      _reactionCounts = countsBeforeOptimisticUpdate;
+      _currentUserReactionEmoji = emojiPreviouslySet;
+
+      // Notifier à nouveau pour que l'UI reflète le rollback.
+      notifyListeners();
+      return false; // Indiquer que l'opération a échoué.
+    }
   }
 
-  Future<bool> addComment(String text) async { // songId est maintenant _currentSongId
+  Future<bool> addComment(String text) async {
+    // ... (INCHANGÉ) ...
     if (_currentSongId == null) {
-      _error = "Aucune chanson sélectionnée pour commenter.";
+      _error = "Aucune chanson sélectionnée.";
       notifyListeners();
       return false;
     }
     if (!_authProvider.isAuthenticated || _authProvider.token == null || _authProvider.currentUser == null) {
-      _error = "Connectez-vous pour commenter.";
+      _error = "Vous devez être connecté pour commenter.";
       notifyListeners();
       return false;
     }
 
-    _isPostingComment = true;
-    _error = null;
-    notifyListeners();
-
     try {
-      final newComment = await _apiService.postComment(
+      final newCommentFromApi = await _apiService.postComment(
         _currentSongId!,
         text,
         authToken: _authProvider.token!,
-        // L'API devrait utiliser le token pour identifier l'utilisateur.
-        // Si l'API a besoin explicitement de `userId` ou `userName` dans le corps, ajoutez-le.
-        // userId: _authProvider.currentUser!.id,
-        // userName: _authProvider.currentUser!.name,
       );
-      if (newComment != null) {
-        _comments.insert(0, newComment); // Ajoute en haut de la liste
-        if (kDebugMode) print("InteractionProvider: Comment added for song $_currentSongId");
-        _songProvider?.updateSongInteractionCounts(_currentSongId!, newCommentCount: _comments.length);
-        notifyListeners(); // Notifier pour reconstruire l'UI des commentaires
+
+      if (newCommentFromApi != null) {
+        _comments.insert(0, newCommentFromApi);
+        _isCommentsInitializedForCurrentSong = true;
+
+        _songProvider?.updateSongInteractionCounts(
+            _currentSongId!,
+            newCommentCount: _comments.length
+        );
+        _error = null;
+        notifyListeners();
         return true;
       } else {
-        _error = "Impossible d'ajouter le commentaire (API a retourné null).";
-      }
-    } catch (e) {
-      _error = "Erreur ajout commentaire: ${e.toString()}";
-      if (kDebugMode) print("InteractionProvider: Error adding comment for $_currentSongId: $e");
-    } finally {
-      _isPostingComment = false;
-      notifyListeners(); // Notifier la fin du post
-    }
-    return false;
-  }
-
-  Future<bool> toggleReaction(String emojiToggled) async {
-    if (_currentSongId == null) {
-      _error = "Aucune chanson sélectionnée pour réagir.";
-      notifyListeners(); return false;
-    }
-    if (!_authProvider.isAuthenticated || _authProvider.token == null || _authProvider.currentUser == null) {
-      _error = "Connectez-vous pour réagir.";
-      notifyListeners(); return false;
-    }
-
-    _isPostingReaction = true;
-    _error = null;
-    notifyListeners();
-
-    // Trouve la réaction existante de l'utilisateur pour cet emoji ou n'importe quel emoji
-    // S'il ne peut y avoir qu'une seule réaction par utilisateur par chanson:
-    final Reaction? existingUserReactionOverall = _currentUserReactionsForCurrentSong.firstOrNull;
-    bool success = false;
-
-    try {
-      if (existingUserReactionOverall != null) { // L'utilisateur a déjà une réaction (quelle qu'elle soit)
-        if (existingUserReactionOverall.emoji == emojiToggled) { // Clique sur le même emoji: supprimer
-          if (kDebugMode) print("InteractionProvider: Toggling OFF reaction '${existingUserReactionOverall.emoji}' (id: ${existingUserReactionOverall.id})");
-          _optimisticUpdateReactionCount(existingUserReactionOverall.emoji, -1);
-          _currentUserReactionsForCurrentSong = []; // Optimistic: remove
-          notifyListeners();
-
-          success = await _apiService.deleteReaction(existingUserReactionOverall.id, authToken: _authProvider.token!);
-          if (!success) { // Rollback si API échoue
-            _error = _error ?? "Échec suppression réaction.";
-            _optimisticUpdateReactionCount(existingUserReactionOverall.emoji, 1); // Remettre
-            _currentUserReactionsForCurrentSong = [existingUserReactionOverall]; // Rollback: re-add
-            if (kDebugMode) print("InteractionProvider: Rollback delete for '${existingUserReactionOverall.emoji}'");
-          } else {
-            if (kDebugMode) print("InteractionProvider: Reaction '${existingUserReactionOverall.emoji}' removed successfully.");
-          }
-        } else { // Clique sur un emoji différent -> Modifier (Delete ancienne, Post nouvelle)
-          if (kDebugMode) print("InteractionProvider: Changing reaction from '${existingUserReactionOverall.emoji}' to '$emojiToggled'");
-          _optimisticUpdateReactionCount(existingUserReactionOverall.emoji, -1); // Remove old
-          _optimisticUpdateReactionCount(emojiToggled, 1); // Add new
-          // Optimistic: _currentUserReactionsForCurrentSong sera mis à jour avec la nouvelle réaction si post OK
-          notifyListeners();
-
-          bool deleteSuccess = await _apiService.deleteReaction(existingUserReactionOverall.id, authToken: _authProvider.token!);
-          if (deleteSuccess) {
-            final Reaction? newApiReaction = await _apiService.postReaction(_currentSongId!, emojiToggled, authToken: _authProvider.token!);
-            if (newApiReaction != null) {
-              _currentUserReactionsForCurrentSong = [newApiReaction]; // Confirmer la nouvelle réaction
-              success = true;
-              if (kDebugMode) print("InteractionProvider: Reaction changed to '$emojiToggled' successfully.");
-            } else { // Post a échoué
-              _error = "Impossible de poster la nouvelle réaction.";
-              _optimisticUpdateReactionCount(existingUserReactionOverall.emoji, 1); // Rollback delete
-              _optimisticUpdateReactionCount(emojiToggled, -1); // Rollback post
-              _currentUserReactionsForCurrentSong = [existingUserReactionOverall]; // Revert to old one
-            }
-          } else { // Delete a échoué
-            _error = "Impossible de supprimer l'ancienne réaction pour modifier.";
-            _optimisticUpdateReactionCount(existingUserReactionOverall.emoji, 1); // Rollback delete
-            _optimisticUpdateReactionCount(emojiToggled, -1); // Rollback (new emoji was never posted)
-            // _currentUserReactionsForCurrentSong n'a pas changé d'état si delete échoue
-          }
-        }
-      } else { // L'utilisateur n'a pas de réaction: ajouter nouvelle
-        if (kDebugMode) print("InteractionProvider: Adding new reaction '$emojiToggled'");
-        _optimisticUpdateReactionCount(emojiToggled, 1);
-        // Optimistic: _currentUserReactionsForCurrentSong sera mis à jour si post OK
+        _error = "Impossible d'ajouter le commentaire.";
         notifyListeners();
-
-        final Reaction? newApiReaction = await _apiService.postReaction(_currentSongId!, emojiToggled, authToken: _authProvider.token!);
-        if (newApiReaction != null) {
-          _currentUserReactionsForCurrentSong = [newApiReaction];
-          success = true;
-          if (kDebugMode) print("InteractionProvider: Reaction '$emojiToggled' added successfully.");
-        } else { // Post a échoué
-          _error = "Impossible d'ajouter la réaction.";
-          _optimisticUpdateReactionCount(emojiToggled, -1); // Rollback
-        }
+        return false;
       }
     } catch (e) {
-      _error = "Erreur: ${e.toString()}";
-      if (kDebugMode) print("InteractionProvider: Error in toggleReaction: $e");
-      success = false;
-      // Tentative de rollback général, plus sûr de refetcher.
-      await fetchReactionsForSong(_currentSongId!, triggeredBySetSongId: true); // Re-fetch pour s'assurer de la cohérence
-    } finally {
-      _isPostingReaction = false;
-      if (success) { // Si succès, mettre à jour le compteur global dans SongProvider
-        _songProvider?.updateSongInteractionCounts(_currentSongId!, newReactionCount: totalReactionCountForCurrentSong);
-      }
-      notifyListeners(); // Notifier l'état final
-    }
-    return success;
-  }
-
-
-  void _optimisticUpdateReactionCount(String emoji, int delta) {
-    _reactionCounts[emoji] = (_reactionCounts[emoji] ?? 0) + delta;
-    if ((_reactionCounts[emoji] ?? 0) <= 0) {
-      _reactionCounts.remove(emoji);
-    }
-  }
-
-  void clearError() {
-    if (_error != null) {
-      _error = null;
+      _error = "Erreur lors de l'ajout du commentaire: ${e.toString()}";
       notifyListeners();
+      return false;
     }
-  }
-
-  @override
-  void dispose() {
-    if (kDebugMode) print("InteractionProvider: Disposing...");
-    super.dispose();
   }
 }

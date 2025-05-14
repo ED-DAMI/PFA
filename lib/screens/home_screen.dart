@@ -1,3 +1,4 @@
+// lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/song_provider.dart';
@@ -7,7 +8,10 @@ import '../services/audio_player_service.dart';
 import '../widgets/common/search_bar_widget.dart';
 import '../widgets/home/song_list_widget.dart';
 import '../widgets/home/tag_list_widget.dart';
-import '../widgets/player/mini_player_widget.dart'; // À créer
+import '../widgets/player/mini_player_widget.dart';
+
+// Importer l'écran de profil utilisateur
+import '../screens/user_profile_screen.dart'; // Assurez-vous que ce chemin est correct
 
 class HomeScreen extends StatefulWidget {
   static const routeName = '/home';
@@ -18,81 +22,153 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-
+  // ... (initState et _handleRefresh restent les mêmes) ...
   @override
   void initState() {
     super.initState();
-    // L'initialisation de SongProvider est gérée par ChangeNotifierProxyProvider
-    // et la méthode updateAuthProvider/initialize dans SongProvider.
-    // Si vous avez besoin de déclencher un chargement spécifique à l'entrée de cet écran
-    // (par exemple, si les données peuvent devenir obsolètes et que vous ne voulez pas
-    // vous fier uniquement aux changements d'AuthProvider), vous pourriez le faire ici.
-    // Mais pour le chargement initial, ce n'est généralement pas nécessaire avec la config actuelle.
-    // Future.microtask(() {
-    //   Provider.of<SongProvider>(context, listen: false).initialize();
-    // });
+    Future.microtask(() {
+      final songProvider = Provider.of<SongProvider>(context, listen: false);
+      if (!songProvider.isInitialized && !songProvider.isLoading) {
+        songProvider.initialize(forceRefresh: false).catchError((error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erreur lors du chargement initial: $error'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        });
+      }
+    });
   }
+
+  Future<void> _handleRefresh() async {
+    final songProvider = Provider.of<SongProvider>(context, listen: false);
+    try {
+      await songProvider.initialize(forceRefresh: true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du rafraîchissement: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
     final songProvider = Provider.of<SongProvider>(context);
-    final audioPlayerService = Provider.of<AudioPlayerService>(context); // listen: true par défaut, ok pour rebuild si état change
+    final audioPlayerService = Provider.of<AudioPlayerService>(context);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false); // Pour l'avatar dans l'icône
 
     Widget bodyContent;
 
     if (!songProvider.isInitialized && songProvider.isLoading) {
-      // Chargement initial, avant que isInitialized ne soit vrai
       bodyContent = const Center(child: CircularProgressIndicator());
     } else if (songProvider.error != null && !songProvider.isInitialized) {
-      // Erreur pendant le chargement initial
       bodyContent = Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Erreur: ${songProvider.error}'),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () {
-                songProvider.clearError(); // Optionnel: efface l'erreur avant de réessayer
-                songProvider.initialize(); // Réessayer l'initialisation complète
-              },
-              child: const Text("Réessayer"),
-            )
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Erreur de chargement: ${songProvider.error}', textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  songProvider.clearError();
+                  songProvider.initialize(forceRefresh: true);
+                },
+                child: const Text("Réessayer"),
+              )
+            ],
+          ),
         ),
       );
     } else {
-      // Données initialisées (avec ou sans chansons) ou erreur après initialisation (moins probable pour fetch global)
-      // La logique pour "aucune chanson" etc. est dans SongListWidget
-      bodyContent = Column(
-        children: [
-          TagListWidget(), // Affiche les tags et gère la sélection
-          Expanded(
-            child: SongListWidget(), // Affiche les chansons filtrées ou les messages appropriés
-          ),
-        ],
+      bodyContent = RefreshIndicator(
+        onRefresh: _handleRefresh,
+        color: Theme.of(context).primaryColor,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TagListWidget(),
+            Expanded(
+              child: SongListWidget(),
+            ),
+          ],
+        ),
       );
+      if (songProvider.error != null && songProvider.isInitialized && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && songProvider.error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erreur: ${songProvider.error}'),
+                backgroundColor: Colors.orange,
+                action: SnackBarAction(
+                  label: "OK",
+                  onPressed: () => songProvider.clearError(),
+                ),
+              ),
+            );
+          }
+        });
+      }
     }
+
+    // Récupérer l'utilisateur actuel pour afficher son avatar (si disponible)
+    final currentUser = authProvider.currentUser;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Music App'),
+        title: const Text('Music App'), // Ou un logo/nom plus spécifique
         actions: [
+          // --- AJOUT DE L'ICÔNE DE PROFIL ICI ---
+          IconButton(
+            icon: (currentUser?.avatarUrl != null && currentUser!.avatarUrl!.isNotEmpty)
+                ? CircleAvatar(
+              radius: 18, // Ajustez la taille selon vos préférences
+              backgroundImage: NetworkImage(currentUser.avatarUrl!),
+              backgroundColor: Colors.transparent, // Pour éviter un fond si l'image est transparente
+            )
+                : const Icon(Icons.account_circle, size: 28), // Icône par défaut si pas d'avatar
+            tooltip: "Profil",
+            onPressed: () {
+              // Vérifier si l'utilisateur est authentifié avant de naviguer
+              if (authProvider.isAuthenticated) {
+                Navigator.of(context).pushNamed(UserProfileScreen.routeName);
+              } else {
+                // Optionnel: Rediriger vers l'écran de connexion si pas authentifié
+                // ou afficher un message. Pour l'instant, on ne fait rien si pas authentifié
+                // car l'accès au profil est généralement pour les utilisateurs connectés.
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Veuillez vous connecter pour voir votre profil.")),
+                );
+              }
+            },
+          ),
+          // --- FIN DE L'AJOUT ---
           IconButton(
             icon: const Icon(Icons.logout),
+            tooltip: "Déconnexion",
             onPressed: () {
-              Provider.of<AuthProvider>(context, listen: false).logout();
-              // La navigation est gérée par le Consumer/Selector dans MyApp/app.dart
+              authProvider.logout();
             },
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(kToolbarHeight),
+          preferredSize: const Size.fromHeight(kToolbarHeight + 8),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 12.0),
             child: SearchBarWidget(
               onSearchChanged: (query) {
-                // Pas besoin d'écouter les changements ici, SearchBarWidget est indépendant
                 Provider.of<SongProvider>(context, listen: false).searchSongs(query);
               },
             ),
@@ -100,9 +176,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: bodyContent,
-      bottomNavigationBar: audioPlayerService.currentSong != null
-          ? MiniPlayerWidget() // Assurez-vous que MiniPlayerWidget est implémenté
-          : null, // Ou const SizedBox.shrink() si vous préférez un widget
+      bottomNavigationBar: audioPlayerService.currentSong != null && audioPlayerService.showPlayer
+          ? MiniPlayerWidget()
+          : const SizedBox.shrink(),
     );
   }
 }

@@ -12,15 +12,13 @@ class SongListWidget extends StatelessWidget {
     // Utiliser songsToDisplay au lieu de songs
     final songs = songProvider.songsToDisplay;
 
-    // Condition de chargement initial (avant que songsToDisplay ne soit peuplé)
-    // ou pendant un re-chargement où _allSongs est vide temporairement.
-    // songProvider.isLoading vérifie isLoadingSongs, isLoadingTags, etc.
-    // songProvider.isInitialized indique si le premier chargement a réussi.
     if (!songProvider.isInitialized && songProvider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Si initialisé mais actuellement en train de recharger (ex: après un pull-to-refresh manuel non implémenté ici)
+    // Si initialisé mais actuellement
+    // en train de recharger
+    //(ex: après un pull-to-refresh manuel non implémenté ici)
     // Ou si le filtrage prend du temps (moins probable pour le filtrage local)
     // if (songProvider.isLoading && songs.isEmpty) {
     //   return const Center(child: CircularProgressIndicator());

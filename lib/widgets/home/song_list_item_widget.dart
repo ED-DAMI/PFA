@@ -1,11 +1,11 @@
 // lib/widgets/home/song_list_item_widget.dart
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:pfa/config/api_config.dart'; // Assurez-vous que ce chemin est correct
+import 'package:pfa/config/api_config.dart';
 import 'package:provider/provider.dart';
 import '../../models/song.dart';
 import '../../services/audio_player_service.dart';
-import '../../screens/song_detail_screen.dart';
+import '../../screens/song_detail_screen.dart'; // SongDetailScreen doit accepter `openReactionsDialogOnLoad`
 
 class SongListItemWidget extends StatelessWidget {
   final Song song;
@@ -30,6 +30,7 @@ class SongListItemWidget extends StatelessWidget {
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(
+              // CORRECTION ICI
               builder: (ctx) => SongDetailScreen(song: song),
             ),
           );
@@ -67,10 +68,10 @@ class SongListItemWidget extends StatelessWidget {
                               width: 65,
                               height: 65,
                               decoration: BoxDecoration(
-                                color: Colors.grey[200],
+                                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Icon(Icons.music_note_rounded, size: 35, color: Colors.grey[500]),
+                              child: Icon(Icons.music_note_rounded, size: 35, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             );
                           },
                         ),
@@ -81,6 +82,7 @@ class SongListItemWidget extends StatelessWidget {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           song.title,
@@ -91,52 +93,56 @@ class SongListItemWidget extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           song.artist,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (song.duration != null && song.duration! > 0)
                           Padding(
-                            padding: const EdgeInsets.only(top: 3.0),
+                            padding: const EdgeInsets.only(top: 4.0),
                             child: Text(
                               song.formattedDuration,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
                             ),
                           ),
                       ],
                     ),
                   ),
-                  isLoadingThisSong
-                      ? const SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)))
-                  )
-                      : IconButton(
-                    icon: Icon(
-                      isPlayingThisSong ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
-                      color: Theme.of(context).primaryColor,
-                      size: 40,
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(
+                      child: isLoadingThisSong
+                          ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2.5)
+                      )
+                          : IconButton(
+                        icon: Icon(
+                          isPlayingThisSong ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                        iconSize: 38,
+                        padding: EdgeInsets.zero,
+                        tooltip: isPlayingThisSong ? 'Pause' : (isPausedOnThisSong ? 'Reprendre' : 'Lecture'),
+                        onPressed: () {
+                          if (isPlayingThisSong) {
+                            audioPlayerService.pause();
+                          } else if (isPausedOnThisSong) {
+                            audioPlayerService.resume();
+                          } else {
+                            audioPlayerService.play(song);
+                          }
+                        },
+                      ),
                     ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    visualDensity: VisualDensity.compact,
-                    tooltip: isPlayingThisSong ? 'Pause' : 'Lecture',
-                    onPressed: () {
-                      if (isPlayingThisSong) {
-                        audioPlayerService.pause();
-                      } else if (isPausedOnThisSong) {
-                        audioPlayerService.resume();
-                      } else {
-                        audioPlayerService.play(song);
-                      }
-                    },
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               DefaultTextStyle(
-                style: Theme.of(context).textTheme.bodySmall!.copyWith(color: Colors.grey[800], fontSize: 12),
+                style: Theme.of(context).textTheme.bodySmall!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12.5),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -147,24 +153,24 @@ class SongListItemWidget extends StatelessWidget {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey[700]),
-                              const SizedBox(width: 4),
+                              Icon(Icons.calendar_today_outlined, size: 15, color: Theme.of(context).hintColor),
+                              const SizedBox(width: 5),
                               Text(song.formattedPublicationDate),
                             ],
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 4),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.visibility_outlined, size: 16, color: Colors.grey[700]),
-                              const SizedBox(width: 4),
+                              Icon(Icons.visibility_outlined, size: 16, color: Theme.of(context).hintColor),
+                              const SizedBox(width: 5),
                               Text(song.formattedViewCount),
                             ],
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -176,12 +182,13 @@ class SongListItemWidget extends StatelessWidget {
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
+                                  // CORRECTION ICI: focusComments est toujours un paramètre valide
                                   builder: (ctx) => SongDetailScreen(song: song, focusComments: true),
                                 ),
                               );
                             }
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 16),
                         _buildMetadataIconText(
                             context: context,
                             icon: Icons.emoji_emotions_outlined,
@@ -190,7 +197,11 @@ class SongListItemWidget extends StatelessWidget {
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (ctx) => SongDetailScreen(song: song, focusReactions: true),
+                                  // CORRECTION ICI: Remplacer focusReactions par openReactionsDialogOnLoad
+                                  builder: (ctx) => SongDetailScreen(
+                                    song: song,
+                                    openReactionsDialogOnLoad: true,
+                                  ),
                                 ),
                               );
                             }
@@ -216,17 +227,24 @@ class SongListItemWidget extends StatelessWidget {
   }) {
     return Tooltip(
       message: tooltip,
+      preferBelow: false,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+          padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 3.0),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: Colors.grey[700]),
-              const SizedBox(width: 4),
-              Text(count.toString(), style: const TextStyle(fontWeight: FontWeight.w500)),
+              Icon(icon, size: 17, color: Theme.of(context).hintColor),
+              const SizedBox(width: 5),
+              Text(
+                count.toString(),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: Theme.of(context).textTheme.bodySmall!.fontSize,
+                ),
+              ),
             ],
           ),
         ),

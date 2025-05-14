@@ -1,4 +1,3 @@
-// lib/models/song.dart
 // import 'package:flutter/foundation.dart'; // Pas utilisé directement ici
 // import 'package:intl/intl.dart'; // Décommentez si vous utilisez DateFormat
 
@@ -8,12 +7,17 @@ DateTime? _safeDateTimeParse(dynamic value) {
   return DateTime.tryParse(value);
 }
 
-int? _safeIntParse(dynamic value) {
-  if (value == null) return null;
+int _safeIntParse(dynamic value) {
+  if (value == null) return 0;
   if (value is int) return value;
-  if (value is String) return int.tryParse(value);
+  if (value is String)
+  {
+    var valueCapture =int.tryParse(value);
+    if(valueCapture!=null) return valueCapture;
+    return 0;
+  }
   if (value is double) return value.toInt();
-  return null;
+  return 0;
 }
 
 List<String>? _safeListStringParse(dynamic value) {
@@ -35,7 +39,7 @@ class Song {
   final String? language;
   final List<String>? tags;
   final DateTime? createdAt; // Date de publication sur la plateforme
-  final int? viewCount;
+  final int viewCount;
   final int commentCount;
   final int totalReactionCount;
 
@@ -50,7 +54,7 @@ class Song {
     this.language,
     this.tags,
     this.createdAt,
-    this.viewCount,
+    required this.viewCount,
     required this.commentCount,
     required this.totalReactionCount,
   });
@@ -68,8 +72,8 @@ class Song {
       tags: _safeListStringParse(json['tags']),
       createdAt: _safeDateTimeParse(json['createdAt']),
       viewCount: _safeIntParse(json['viewCount']),
-      commentCount: _safeIntParse(json['commentCount']) ?? 0,
-      totalReactionCount: _safeIntParse(json['totalReactionCount']) ?? 0,
+      commentCount: _safeIntParse(json['commentCount']), // Redundant ?? 0 removed
+      totalReactionCount: _safeIntParse(json['totalReactionCount']), // Redundant ?? 0 removed
     );
   }
 
@@ -89,10 +93,10 @@ class Song {
   }
 
   String get formattedViewCount {
-    if (viewCount == null || viewCount! < 0) return '0';
-    if (viewCount! < 1000) return viewCount.toString();
-    if (viewCount! < 1000000) return '${(viewCount! / 1000).toStringAsFixed(viewCount! % 1000 == 0 ? 0 : 1)}k';
-    return '${(viewCount! / 1000000).toStringAsFixed(viewCount! % 1000000 == 0 ? 0 : 1)}M';
+    if (viewCount < 0) return '0'; // Simplified null check as _safeIntParse defaults to 0
+    if (viewCount < 1000) return viewCount.toString();
+    if (viewCount < 1000000) return '${(viewCount / 1000).toStringAsFixed(viewCount % 1000 == 0 ? 0 : 1)}k';
+    return '${(viewCount / 1000000).toStringAsFixed(viewCount % 1000000 == 0 ? 0 : 1)}M';
   }
 
   @override
@@ -107,4 +111,39 @@ class Song {
 
   @override
   int get hashCode => id.hashCode;
+
+  get coverImageUrl => null;
+
+
+  Song copyWith({
+    String? id,
+    String? title,
+    String? artist,
+    String? album,
+    String? genre,
+    int? duration,
+    DateTime? releaseDate,
+    String? language,
+    List<String>? tags,
+    DateTime? createdAt,
+    int? viewCount,
+    int? commentCount,
+    int? totalReactionCount,
+  }) {
+    return Song(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
+      genre: genre ?? this.genre,
+      duration: duration ?? this.duration,
+      releaseDate: releaseDate ?? this.releaseDate,
+      language: language ?? this.language,
+      tags: tags ?? this.tags,
+      createdAt: createdAt ?? this.createdAt,
+      viewCount: viewCount ?? this.viewCount,
+      commentCount: commentCount ?? this.commentCount,
+      totalReactionCount: totalReactionCount ?? this.totalReactionCount,
+    );
+  }
 }
