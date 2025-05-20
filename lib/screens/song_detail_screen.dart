@@ -2,23 +2,22 @@
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:pfa/config/api_config.dart';
+import 'package:pfa/config/api_config.dart'; // Assurez-vous que cette constante est bien définie
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:share_plus/share_plus.dart'; // Import pour la fonctionnalité de partage
 
-import '../models/song.dart';
+import '../models/song.dart'; // Assurez-vous que Song a les getters formatés
+import '../models/playlist.dart'; // Pour _showAddToPlaylistDialog
 import '../providers/auth_provider.dart';
 import '../providers/interaction_provider.dart';
-import '../services/ApiService.dart';
-import '../services/audio_player_service.dart';
-import '../utils/helpers.dart';
-import '../widgets/song_detail/comment_section_widget.dart';
+import '../providers/playlist_provider.dart'; // Pour _showAddToPlaylistDialog
+import '../widgets/services/ApiService.dart';
+import '../widgets/services/audio_player_service.dart';
+import '../utils/helpers.dart'; // Pour showAppSnackBar et formatDuration
+import '../widgets/song_detail/comment_section_widget.dart'; // Widget à implémenter
 import '../widgets/song_detail/reactions_dialog_helper.dart';
-import '../../utils/constants.dart';
-
-// Added imports
-import '../providers/playlist_provider.dart';
-import '../models/playlist.dart';
+import '../../utils/constants.dart'; // Pour kReactionEmojis
 
 class SongDetailScreen extends StatefulWidget {
   static const routeName = '/song-detail';
@@ -56,16 +55,24 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final interactionProvider = Provider.of<InteractionProvider>(context, listen: false);
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final apiService = Provider.of<ApiService>(context, listen: false);
+
+        // Initialiser InteractionProvider pour la chanson actuelle
         interactionProvider.setSongId(widget.song.id, forceRefresh: true).then((_) {
           if (mounted) {
             _handleInitialFocusOrAction();
           }
         });
+
         _fetchRecommendations();
 
-        // It's also a good idea to ensure playlists are fetched if the user might access this feature.
-        // However, PlaylistProvider itself handles its initialization state.
-        // We can trigger a fetch in _showAddToPlaylistDialog if needed.
+        // Incrémenter la vue si l'utilisateur est connecté
+        // Une logique plus avancée pourrait vérifier si la vue a déjà été incrémentée pour cette chanson dans cette session
+        // ou lier l'incrémentation à un temps de lecture minimal via AudioPlayerService.
+        if (authProvider.isAuthenticated && authProvider.token != null) {
+          apiService.incrementSongView(widget.song.id, authToken: authProvider.token!);
+        }
       }
     });
   }
@@ -80,6 +87,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
           _isCommentsExpanded = true;
         });
       }
+      // S'assurer que l'ExpansionTile est rendu avant de scroller
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _isCommentsExpanded) {
           _scrollToSection(_commentsExpansionTileKey);
@@ -88,6 +96,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
     }
 
     if (widget.openReactionsDialogOnLoad) {
+      // Attendre que InteractionProvider ait potentiellement chargé les réactions
       void checkReactionsAndOpenDialog() {
         if (!mounted) return;
         if (interactionProvider.currentSongId == widget.song.id &&
@@ -95,6 +104,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             !interactionProvider.isLoadingReactions) {
           showReactionsPickerDialog(screenContext: context, songId: widget.song.id);
         } else if (interactionProvider.isLoadingReactions && interactionProvider.currentSongId == widget.song.id) {
+          // Si en chargement, réessayer après un court délai
           Future.delayed(const Duration(milliseconds: 300), checkReactionsAndOpenDialog);
         }
       }
@@ -112,11 +122,6 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       final apiService = Provider.of<ApiService>(context, listen: false);
       final token = Provider.of<AuthProvider>(context, listen: false).token;
       final recommendations = await apiService.fetchRecommendedSongs(widget.song.id, authToken: token);
-      if(token!=null) {
-        // Consider moving view increment logic to a more central place or ensuring it's idempotent.
-        // For now, it's as per original code.
-        await apiService.IncrmentView(widget.song.id,authToken: token); // Assuming IncrmentView -> incrementView
-      }
 
       if (mounted) {
         setState(() {
@@ -124,9 +129,10 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
         });
       }
     } catch (e) {
+      if (kDebugMode) print("Error fetching recommendations: $e");
       if (mounted) {
         setState(() {
-          _recommendationsError = e.toString();
+          _recommendationsError = "Impossible de charger les recommandations.";
         });
       }
     } finally {
@@ -145,7 +151,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
         currentContext,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
-        alignment: 0.1,
+        alignment: 0.1, // Scroller légèrement au-dessus pour la visibilité
       );
     }
   }
@@ -163,32 +169,32 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       return;
     }
 
-    if (interactionProvider.currentSongId == widget.song.id &&
-        interactionProvider.isReactionsInitializedForCurrentSong &&
-        !interactionProvider.isLoadingReactions) {
-      showReactionsPickerDialog(screenContext: context, songId: widget.song.id);
-    } else if (interactionProvider.isLoadingReactions && interactionProvider.currentSongId == widget.song.id) {
-      showAppSnackBar(context, "Chargement des réactions...", isError: false);
-    } else {
-      if (interactionProvider.currentSongId != widget.song.id) {
-        if (kDebugMode) {
-          print("Open Dialog WARN: InteractionProvider not set for song ${widget.song.id}. Calling setSongId.");
-        }
-        interactionProvider.setSongId(widget.song.id, forceRefresh: true);
-        showAppSnackBar(context, "Préparation des données de réactions...", isError: false);
-      } else {
-        showAppSnackBar(context, "Les données de réactions ne sont pas encore disponibles.", isError: true);
-        if (!interactionProvider.isLoadingReactions && interactionProvider.error == null) {
-          if (kDebugMode) {
-            print("Open Dialog: Triggering fetchReactions as data was not ready.");
-          }
-          interactionProvider.fetchReactions();
-        }
-      }
+    // Logique pour s'assurer que InteractionProvider est prêt
+    if (interactionProvider.currentSongId != widget.song.id) {
+      if (kDebugMode) print("ReactionsDialog: InteractionProvider songId mismatch. Setting songId.");
+      interactionProvider.setSongId(widget.song.id, forceRefresh: true).then((_) {
+        if(mounted) _openReactionsDialog(context, interactionProvider); // Réessayer après setSongId
+      });
+      showAppSnackBar(context, "Préparation des réactions...", isError: false);
+      return;
     }
+
+    if (interactionProvider.isLoadingReactions) {
+      showAppSnackBar(context, "Chargement des réactions...", isError: false);
+      return;
+    }
+
+    if (!interactionProvider.isReactionsInitializedForCurrentSong) {
+      interactionProvider.fetchReactions().then((_){ // Tenter de charger si non initialisé
+        if(mounted) _openReactionsDialog(context, interactionProvider); // Réessayer
+      });
+      showAppSnackBar(context, "Chargement initial des réactions...", isError: false);
+      return;
+    }
+    // Si tout est prêt :
+    showReactionsPickerDialog(screenContext: context, songId: widget.song.id);
   }
 
-  // New method to show playlists for adding the current song
   void _showAddToPlaylistDialog(BuildContext screenContext) {
     final playlistProvider = Provider.of<PlaylistProvider>(screenContext, listen: false);
     final authProvider = Provider.of<AuthProvider>(screenContext, listen: false);
@@ -198,34 +204,25 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       return;
     }
 
-    // Ensure playlists are loaded if not already.
-    // PlaylistProvider.fetchPlaylists has its own internal guards.
+    // S'assurer que les playlists sont chargées (PlaylistProvider devrait gérer l'état interne)
     if (!playlistProvider.isInitialized && !playlistProvider.isLoadingList) {
-      playlistProvider.fetchPlaylists();
+      playlistProvider.fetchPlaylists(); // Déclenche le fetch si nécessaire
     }
 
     showModalBottomSheet(
       context: screenContext,
-      isScrollControlled: true, // Allows the sheet to take more height if needed
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (dialogCtx) {
-        return Consumer<PlaylistProvider>( // Use Consumer to react to loading/data changes
+        return Consumer<PlaylistProvider>(
           builder: (context, pProvider, child) {
             Widget content;
             if (pProvider.isLoadingList && !pProvider.isInitialized) {
-              content = const SizedBox(
-                height: 200,
-                child: Center(child: CircularProgressIndicator()),
-              );
+              content = const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
             } else if (pProvider.error != null && pProvider.playlists.isEmpty) {
-              content = SizedBox(
-                height: 200,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text("Erreur de chargement des playlists: ${pProvider.error}"),
-                  ),
-                ),
-              );
+              content = SizedBox(height: 200, child: Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Erreur de chargement des playlists: ${pProvider.error}"))));
             } else if (pProvider.playlists.isEmpty) {
               content = SizedBox(
                 height: 200,
@@ -238,9 +235,8 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                       ElevatedButton(
                         child: const Text("Créer une playlist"),
                         onPressed: () {
-                          Navigator.of(dialogCtx).pop();
-                          // Note: The actual create playlist dialog is in UserProfileScreen.
-                          // This button could navigate there or show a simpler message.
+                          Navigator.of(dialogCtx).pop(); // Fermer le bottom sheet
+                          // TODO: Naviguer vers UserProfileScreen ou implémenter un dialogue de création ici
                           showAppSnackBar(screenContext, "Allez à votre profil pour créer une playlist.");
                         },
                       )
@@ -250,75 +246,53 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
               );
             } else {
               content = ListView.builder(
-                shrinkWrap: true, // Important for ListView in a Column/bottom sheet
+                shrinkWrap: true,
                 itemCount: pProvider.playlists.length,
                 itemBuilder: (ctx, index) {
                   final playlist = pProvider.playlists[index];
                   final bool songAlreadyInPlaylist = playlist.songIds.contains(widget.song.id);
 
                   return ListTile(
-                    leading: Icon(songAlreadyInPlaylist ? Icons.check_circle_outline : Icons.playlist_add_outlined,
-                        color: songAlreadyInPlaylist ? Colors.green : null),
+                    leading: Icon(songAlreadyInPlaylist ? Icons.check_circle_outline : Icons.playlist_add_outlined, color: songAlreadyInPlaylist ? Colors.green : Theme.of(dialogCtx).iconTheme.color),
                     title: Text(playlist.name),
                     subtitle: Text("${playlist.songIds.length} chanson(s)"),
-                    enabled: !songAlreadyInPlaylist && !pProvider.isModifyingItem,
+                    enabled: !songAlreadyInPlaylist && !pProvider.isModifyingItem, // Désactiver si déjà dedans ou si une opération est en cours
                     trailing: songAlreadyInPlaylist
-                        ? null // No trailing if song is already in playlist
-                        : (pProvider.isModifyingItem // Show loader if any modification is ongoing
+                        ? null
+                        : (pProvider.modifyingPlaylistId == playlist.id && pProvider.isModifyingItem
                         ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.add_circle_outline)), // Icon to indicate "add" action
+                        : const Icon(Icons.add_circle_outline)),
                     onTap: songAlreadyInPlaylist || pProvider.isModifyingItem
                         ? null
                         : () async {
-                      Navigator.of(dialogCtx).pop(); // Close the bottom sheet
+                      final success = await pProvider.addSongToPlaylist(playlist.id, widget.song.id);
+                      if (!dialogCtx.mounted) return; // Vérifier avant d'interagir avec dialogCtx
+                      Navigator.of(dialogCtx).pop(); // Fermer le bottom sheet après l'action
 
-                      showAppSnackBar(
-                          screenContext,
-                          "Ajout de '${widget.song.title}' à '${playlist.name}'...",
-                          isError: false,
-                          //duration: const Duration(seconds: 2)
-                      );
-
-                      bool success = await pProvider.addSongToPlaylist(playlist.id, widget.song.id);
-
-                      if (!screenContext.mounted) return;
-
+                      if (!screenContext.mounted) return; // Vérifier avant d'interagir avec screenContext
                       if (success) {
-                        showAppSnackBar(
-                            screenContext,
-                            "'${widget.song.title}' ajouté à '${playlist.name}' !",
-                            isError: false,
-                            //backgroundColor: Colors.green
-                        );
+                        showAppSnackBar(screenContext, "'${widget.song.title}' ajouté à '${playlist.name}' !", isError: false, backgroundColor: Colors.green);
                       } else {
-                        showAppSnackBar(
-                            screenContext,
-                            pProvider.error ?? "Erreur lors de l'ajout.",
-                            isError: true
-                        );
+                        showAppSnackBar(screenContext, pProvider.error ?? "Erreur lors de l'ajout.", isError: true);
                       }
                     },
                   );
                 },
               );
             }
-
-            return Padding( // Wrap content in Padding for viewInsets and overall padding
+            // Envelopper le contenu pour le padding et la gestion du clavier
+            return Padding(
               padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(dialogCtx).viewInsets.bottom, // For keyboard
-                  top: 16, left: 16, right: 16
+                bottom: MediaQuery.of(dialogCtx).viewInsets.bottom + 16, // Pour le clavier et padding bas
+                top: 20, left: 16, right: 16,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    "Ajouter à...",
-                    style: Theme.of(dialogCtx).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 10),
-                  Flexible(child: content), // Make the list scrollable if content is too long
-                  const SizedBox(height: 16), // Padding at the bottom
+                  Text("Ajouter à une playlist", style: Theme.of(dialogCtx).textTheme.titleLarge),
+                  const SizedBox(height: 12),
+                  Flexible(child: SingleChildScrollView(child: content)), // Assurer le défilement si la liste est longue
                 ],
               ),
             );
@@ -328,6 +302,21 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
     );
   }
 
+  Future<void> _shareSong() async {
+    // Idéalement, vous auriez une URL "deep link" pour votre chanson.
+    // Pour l'exemple, nous utilisons une URL générique.
+    final String songDeepLink = "https://monapp.com/songs/${widget.song.id}"; // Remplacez par votre deep link
+    final String shareText = "Écoute '${widget.song.title}' par ${widget.song.artist} sur MaSuperApp!\n$songDeepLink";
+
+    try {
+      await Share.share(shareText, subject: "Découvre cette chanson : ${widget.song.title}");
+    } catch (e) {
+      if (kDebugMode) print("Erreur de partage: $e");
+      if (mounted) {
+        showAppSnackBar(context, "Impossible de partager la chanson pour le moment.", isError: true);
+      }
+    }
+  }
 
   Widget _buildSongTitleAndArtist(BuildContext context) {
     return Column(
@@ -365,32 +354,19 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
     String? currentUserEmojiReaction;
     bool userHasReacted = false;
 
-    if (interactionProvider.currentSongId == widget.song.id &&
-        interactionProvider.isReactionsInitializedForCurrentSong) {
+    if (interactionProvider.currentSongId == widget.song.id && interactionProvider.isReactionsInitializedForCurrentSong) {
       currentUserEmojiReaction = interactionProvider.currentUserReactionEmoji;
       userHasReacted = currentUserEmojiReaction != null;
     }
 
     Widget reactionIconWidget;
-    Color? reactionIconColor = Theme.of(context).iconTheme.color;
+    Color reactionIconColor = Theme.of(context).iconTheme.color ?? Colors.grey;
 
     if (userHasReacted && currentUserEmojiReaction != null) {
-      reactionIconWidget = Text(
-        currentUserEmojiReaction,
-        style: TextStyle(fontSize: 26, color: reactionIconColor),
-      );
-      if (currentUserEmojiReaction == '❤️') {
-        reactionIconColor = Colors.redAccent;
-        reactionIconWidget = Text(
-          currentUserEmojiReaction,
-          style: TextStyle(fontSize: 26, color: reactionIconColor),
-        );
-      }
+      reactionIconWidget = Text(currentUserEmojiReaction, style: TextStyle(fontSize: 26, color: (currentUserEmojiReaction == '❤️' ? Colors.redAccent : reactionIconColor)));
+      if (currentUserEmojiReaction == '❤️') reactionIconColor = Colors.redAccent;
     } else {
-      reactionIconWidget = Icon(
-        Icons.sentiment_satisfied_alt_outlined,
-        color: reactionIconColor,
-      );
+      reactionIconWidget = Icon(Icons.sentiment_satisfied_alt_outlined, color: reactionIconColor);
     }
 
     return Column(
@@ -407,46 +383,29 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             children: <Widget>[
               Tooltip(
                 message: userHasReacted ? "Modifier votre réaction / Voir réactions" : "Réagir / Voir réactions",
-                child: IconButton(
-                  icon: reactionIconWidget,
-                  iconSize: 28,
-                  color: reactionIconColor,
-                  onPressed: () {
-                    _openReactionsDialog(context, interactionProvider);
-                  },
-                  onLongPress: () {
-                    _openReactionsDialog(context, interactionProvider);
-                  },
-                ),
+                child: IconButton(icon: reactionIconWidget, iconSize: 28, color: reactionIconColor, onPressed: () => _openReactionsDialog(context, interactionProvider)),
               ),
               IconButton(
                 icon: const Icon(Icons.skip_previous_rounded),
                 iconSize: 38,
                 tooltip: "Précédent",
-                onPressed: () {
-                  showAppSnackBar(context, 'Précédent : Non implémenté');
-                },
+                onPressed: () => audioPlayerService.skipPrevious(),
               ),
               if (audioPlayerService.isLoading && isThisSongLoadedInPlayer)
-                SizedBox(
-                    width: 70,
-                    height: 70,
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 3.0, color: Theme.of(context).primaryColor)))
+                SizedBox(width: 70, height: 70, child: Center(child: CircularProgressIndicator(strokeWidth: 3.0, color: Theme.of(context).primaryColor)))
               else
                 IconButton(
-                  icon: Icon(
-                    isPlayingThisSong ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
-                  ),
+                  icon: Icon(isPlayingThisSong ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded),
                   iconSize: 70,
                   color: Theme.of(context).primaryColor,
-                  tooltip: isPlayingThisSong ? "Pause" : "Lecture",
+                  tooltip: isPlayingThisSong ? "Pause" : (isPausedOnThisSong ? "Reprendre" : "Lecture"),
                   onPressed: () {
                     if (isPlayingThisSong) {
                       audioPlayerService.pause();
                     } else if (isPausedOnThisSong) {
                       audioPlayerService.resume();
                     } else {
-                      if(interactionProvider.currentSongId != widget.song.id) {
+                      if (interactionProvider.currentSongId != widget.song.id) {
                         interactionProvider.setSongId(widget.song.id, forceRefresh: false);
                       }
                       audioPlayerService.play(widget.song);
@@ -457,44 +416,43 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                 icon: const Icon(Icons.skip_next_rounded),
                 iconSize: 38,
                 tooltip: "Suivant",
-                onPressed: () {
-                  showAppSnackBar(context, 'Suivant : Non implémenté');
-                },
+                onPressed: () => audioPlayerService.skipNext(),
               ),
-              IconButton( // This is the "More Options" button
+              IconButton(
                 icon: const Icon(Icons.more_horiz_rounded),
                 iconSize: 28,
                 tooltip: "Plus d'options",
                 onPressed: () {
                   showModalBottomSheet(
-                    context: context, // Screen's context
-                    builder: (ctx) => Wrap( // ctx is for the modal sheet
+                    context: context,
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                    builder: (ctx) => Wrap(
                       children: <Widget>[
                         ListTile(
                           leading: const Icon(Icons.playlist_add),
                           title: const Text('Ajouter à une playlist'),
                           onTap: () {
-                            Navigator.of(ctx).pop(); // Close this "More Options" sheet
-                            _showAddToPlaylistDialog(context); // Show the "Add to Playlist" sheet
+                            Navigator.of(ctx).pop();
+                            _showAddToPlaylistDialog(context);
                           },
                         ),
                         ListTile(
-                          leading: const Icon(Icons.share),
+                          leading: const Icon(Icons.share_outlined),
                           title: const Text('Partager'),
                           onTap: () {
                             Navigator.of(ctx).pop();
-                            showAppSnackBar(context, 'Partager: Non implémenté');
+                            _shareSong();
                           },
                         ),
                         if (widget.song.album != null && widget.song.album!.isNotEmpty)
                           ListTile(
                             leading: const Icon(Icons.album_outlined),
                             title: Text('Album: ${widget.song.album}'),
-                            onTap: () { Navigator.of(ctx).pop();},
+                            onTap: () { Navigator.of(ctx).pop(); /* TODO: Naviguer vers vue album */ },
                           ),
                         ListTile(
                           leading: const Icon(Icons.info_outline),
-                          title: const Text('Détails (Genre, Date...)'),
+                          title: const Text('Détails de la chanson'),
                           onTap: () {
                             Navigator.of(ctx).pop();
                             _showMoreSongInfoDialog(context);
@@ -517,6 +475,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Informations sur la chanson"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -525,8 +484,9 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
               if (widget.song.album != null && widget.song.album!.isNotEmpty)
                 _buildInfoRowDialog(Icons.album_outlined, 'Album', widget.song.album!),
               _buildInfoRowDialog(Icons.category_outlined, 'Genre', widget.song.genre),
-              if (widget.song.createdAt != null)
+              if (widget.song.createdAt != null) // Assurez-vous que Song a `formattedPublicationDate`
                 _buildInfoRowDialog(Icons.calendar_today_outlined, 'Publié le', widget.song.formattedPublicationDate),
+              // Assurez-vous que Song a `formattedDuration` et `formattedViewCount`
               if (widget.song.duration != null && widget.song.duration! > 0)
                 _buildInfoRowDialog(Icons.timer_outlined, 'Durée', widget.song.formattedDuration),
               if (widget.song.viewCount > 0)
@@ -541,13 +501,14 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
 
   Widget _buildInfoRowDialog(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 20, color: Theme.of(context).colorScheme.secondary),
           const SizedBox(width: 12),
           Text('$label: ', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500)),
-          Expanded(child: Text(value, style: Theme.of(context).textTheme.bodyMedium, overflow: TextOverflow.ellipsis)),
+          Expanded(child: Text(value, style: Theme.of(context).textTheme.bodyMedium, overflow: TextOverflow.visible)),
         ],
       ),
     );
@@ -555,9 +516,11 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
 
   Widget _buildActualProgressSlider(BuildContext context, AudioPlayerService audioPlayerService, bool isThisSongLoaded) {
     final currentMs = isThisSongLoaded ? audioPlayerService.currentPosition.inMilliseconds.toDouble() : 0.0;
+    // Utiliser la durée de la chanson comme fallback si totalDuration n'est pas encore disponible
     final totalMs = isThisSongLoaded && audioPlayerService.totalDuration > Duration.zero
         ? audioPlayerService.totalDuration.inMilliseconds.toDouble()
-        : (widget.song.duration?.toDouble() ?? 1.0);
+        : (widget.song.duration != null ? Duration(seconds: widget.song.duration!).inMilliseconds.toDouble() : 1.0);
+
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -574,10 +537,12 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
           child: Slider(
             value: currentMs.clamp(0.0, totalMs > 0 ? totalMs : 1.0),
             min: 0.0,
-            max: totalMs > 0 ? totalMs : 1.0,
-            onChanged: (isThisSongLoaded && totalMs > 0) ? (value) {
+            max: totalMs > 0 ? totalMs : 1.0, // S'assurer que max n'est jamais 0
+            onChanged: (isThisSongLoaded && totalMs > 0)
+                ? (value) {
               audioPlayerService.seek(Duration(milliseconds: value.toInt()));
-            } : null,
+            }
+                : null, // Désactiver si pas chargé ou durée inconnue
           ),
         ),
         Padding(
@@ -589,7 +554,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                 isThisSongLoaded ? formatDuration(audioPlayerService.currentPosition) : "0:00",
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
-              Text(
+              Text( // Utiliser formattedDuration du modèle Song comme fallback
                 isThisSongLoaded && audioPlayerService.totalDuration > Duration.zero
                     ? formatDuration(audioPlayerService.totalDuration)
                     : widget.song.formattedDuration,
@@ -603,26 +568,22 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
   }
 
   Widget _buildDetailedReactionsDisplay(BuildContext context, InteractionProvider interactionProvider) {
-    if (interactionProvider.currentSongId != widget.song.id ||
-        (!interactionProvider.isReactionsInitializedForCurrentSong && !interactionProvider.isLoadingReactions)) {
-      return const SizedBox.shrink();
+    if (interactionProvider.currentSongId != widget.song.id || (!interactionProvider.isReactionsInitializedForCurrentSong && !interactionProvider.isLoadingReactions)) {
+      return const SizedBox.shrink(); // Ne rien afficher si pas pour cette chanson ou non initialisé
     }
 
     if (interactionProvider.isLoadingReactions && !interactionProvider.isReactionsInitializedForCurrentSong) {
-      return const Center(child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 16.0),
-        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
-      ));
+      return const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 16.0), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5))));
     }
 
     final reactionCounts = interactionProvider.reactionCounts;
     final List<Widget> reactionChips = [];
     int totalReactions = 0;
 
-    kReactionEmojis.forEach((emoji) {
+    kReactionEmojis.forEach((emoji) { // Utiliser kReactionEmojis pour un ordre constant
       final count = reactionCounts[emoji] ?? 0;
       totalReactions += count;
-      if (count > 0) {
+      if (count > 0) { // Afficher seulement les réactions qui ont un compte > 0
         reactionChips.add(
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3.0),
@@ -651,27 +612,17 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             borderRadius: BorderRadius.circular(8.0),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-              child: Text(
-                "Soyez le premier à réagir !",
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
+              child: Text("Soyez le premier à réagir !", style: TextStyle(color: Theme.of(context).colorScheme.primary, fontStyle: FontStyle.italic)),
             ),
           ),
         ),
       );
     }
+    if (reactionChips.isEmpty) return const SizedBox.shrink(); // Si aucune réaction à afficher après le filtrage
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-      child: Wrap(
-        spacing: 6.0,
-        runSpacing: 4.0,
-        alignment: WrapAlignment.center,
-        children: reactionChips.isEmpty && !interactionProvider.isLoadingReactions ? [] : reactionChips,
-      ),
+      child: Wrap(spacing: 6.0, runSpacing: 4.0, alignment: WrapAlignment.center, children: reactionChips),
     );
   }
 
@@ -702,14 +653,11 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
               children: [
                 Icon(Icons.chat_bubble_outline_rounded, size: 24, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(width: 10),
-                Text(
-                  'Comments',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
+                Text('Commentaires', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(width: 8),
                 Text(
                   (interactionProvider.isLoadingComments && !interactionProvider.isCommentsInitializedForCurrentSong && interactionProvider.currentSongId == widget.song.id)
-                      ? "(...)"
+                      ? "(Chargement...)"
                       : '($displayCommentCount)',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
                 ),
@@ -723,20 +671,15 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                 children: [
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: Colors.black87, // Consider Theme.of(context).colorScheme.primary for consistency
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer, // Ou une couleur basée sur l'avatar de l'utilisateur si disponible
                     child: Text(
-                      latestComment.author.isNotEmpty ? latestComment.author[0].toUpperCase() : "?",
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      latestComment.author.isNotEmpty ? latestComment.author[0].toUpperCase() : "?", // Supposant que Comment a authorUsername
+                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      latestComment.text,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(latestComment.text, style: Theme.of(context).textTheme.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ],
               ),
@@ -752,10 +695,13 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       return const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 40.0), child: CircularProgressIndicator()));
     }
     if (_recommendationsError != null) {
-      return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Erreur recommandations: $_recommendationsError", style: TextStyle(color: Colors.red[700]))));
+      return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text(_recommendationsError!, style: TextStyle(color: Theme.of(context).colorScheme.error))));
     }
     if (_recommendedSongs.isEmpty) {
-      return const SizedBox.shrink(); // No recommendations to show
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20.0),
+        child: Center(child: Text("Aucune recommandation pour le moment.")),
+      );
     }
 
     return Column(
@@ -763,64 +709,56 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 12.0),
-          child: Text(
-            "You might also like",
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-          ),
+          child: Text("Vous pourriez aussi aimer", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
         ),
         SizedBox(
-          height: 190, // Adjust height as needed
+          height: 190,
           child: ListView.builder(
-            key: const PageStorageKey<String>('recommendationsListNewUI'),
+            key: const PageStorageKey<String>('recommendationsList'), // Clé pour la préservation de l'état de défilement
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 10.0),
             itemCount: _recommendedSongs.length,
             itemBuilder: (ctx, index) {
               final rSong = _recommendedSongs[index];
-              final String rCoverUrl = '${API_BASE_URL}/api/songs/${rSong.id}/cover'; // Use model's getter
+              // Supposer que Song a un getter `coverArtUrl` ou que vous construisez l'URL ici
+              final String rCoverUrl = rSong.coverImageUrl ?? '${API_BASE_URL}/api/songs/${rSong.id}/cover';
+
               return Container(
-                width: MediaQuery.of(context).size.width * 0.38, // Adjust width as needed
+                width: MediaQuery.of(context).size.width * 0.38,
                 margin: const EdgeInsets.symmetric(horizontal: 6),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8.0),
-                  onTap: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => SongDetailScreen(song: rSong))),
+                  onTap: () {
+                    // Utiliser push pour permettre le retour, ou pushReplacement si vous ne voulez pas empiler les écrans de détail.
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => SongDetailScreen(song: rSong)));
+                  },
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AspectRatio(
                         aspectRatio: 1,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8.0),
-                          child: Image.network(
-                            rCoverUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
-                                borderRadius: BorderRadius.circular(8.0),
+                        child: Hero( // Ajout d'un Hero tag pour une transition douce si possible
+                          tag: 'song_cover_recommendation_${rSong.id}',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8.0),
+                            child: Image.network(
+                              rCoverUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceVariant, borderRadius: BorderRadius.circular(8.0)),
+                                child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 40),
                               ),
-                              child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 40),
                             ),
                           ),
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0, left: 2.0, right: 2.0),
-                        child: Text(
-                          rSong.title,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text(rSong.title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(top: 2.0, left: 2.0, right: 2.0),
-                        child: Text(
-                          rSong.artist,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text(rSong.artist, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),
@@ -835,20 +773,20 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final audioPlayerService = Provider.of<AudioPlayerService>(context);
-    final interactionProvider = Provider.of<InteractionProvider>(context);
+    final audioPlayerService = Provider.of<AudioPlayerService>(context); // Listen true pour la réactivité de l'UI
+    final interactionProvider = Provider.of<InteractionProvider>(context); // Listen true pour les réactions/commentaires
 
     final bool isThisSongLoadedInPlayer = audioPlayerService.currentSong?.id == widget.song.id;
     final bool isPlayingThisSong = isThisSongLoadedInPlayer && audioPlayerService.isPlaying;
     final bool isPausedOnThisSong = isThisSongLoadedInPlayer && audioPlayerService.playerState == PlayerState.paused;
 
-    final String coverImageUrl = '${API_BASE_URL}/api/songs/${widget.song.id}/cover'; // Use model's getter
+    // Supposer que Song a un getter `coverArtUrl` ou que vous construisez l'URL ici
+    final String coverImageUrl = widget.song.coverImageUrl ?? '${API_BASE_URL}/api/songs/${widget.song.id}/cover';
 
-    int displayCommentCount = widget.song.commentCount;
-    if (interactionProvider.currentSongId == widget.song.id &&
-        interactionProvider.isCommentsInitializedForCurrentSong &&
-        !interactionProvider.isLoadingComments) {
-      displayCommentCount = interactionProvider.comments.length;
+    // Calcul du nombre de commentaires à afficher
+    int displayCommentCount = widget.song.commentCount; // Valeur par défaut du modèle
+    if (interactionProvider.currentSongId == widget.song.id && interactionProvider.isCommentsInitializedForCurrentSong && !interactionProvider.isLoadingComments) {
+      displayCommentCount = interactionProvider.comments.length; // Utiliser la longueur de la liste du provider si disponible
     }
 
     return Scaffold(
@@ -860,12 +798,12 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
             pinned: true,
             floating: false,
             elevation: 2.0,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            surfaceTintColor: Colors.transparent,
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Pour une meilleure transition
+            surfaceTintColor: Colors.transparent, // Pour enlever la teinte par défaut sur scroll
             leading: Padding(
               padding: const EdgeInsets.all(8.0),
               child: CircleAvatar(
-                backgroundColor: Colors.black.withOpacity(0.35),
+                backgroundColor: Colors.black.withOpacity(0.45), // Fond légèrement plus opaque
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
                   tooltip: "Retour",
@@ -874,28 +812,40 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
               ),
             ),
             flexibleSpace: FlexibleSpaceBar(
-              centerTitle: true,
-              titlePadding: const EdgeInsets.only(bottom: 16.0, left: 70, right: 70),
-              title: Text(
+              centerTitle: true, // Centrer le titre quand réduit
+              titlePadding: const EdgeInsets.only(bottom: 16.0, left: 70, right: 70), // Padding pour le titre
+              title: Text( // Titre visible quand l'appbar est réduite
                 widget.song.title.toUpperCase(),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.1,
-                  shadows: [ const Shadow(blurRadius: 6.0, color: Colors.black87, offset: Offset(0, 1)) ],
+                  shadows: [const Shadow(blurRadius: 8.0, color: Colors.black, offset: Offset(0, 2))], // Ombre plus prononcée
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               background: Hero(
-                tag: 'song_cover_${widget.song.id}',
+                tag: 'song_cover_${widget.song.id}', // Hero tag pour la transition
                 child: Container(
                   decoration: BoxDecoration(
                     image: DecorationImage(
                       image: NetworkImage(coverImageUrl),
                       fit: BoxFit.cover,
-                      colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.30), BlendMode.darken),
+                      // Filtre pour assombrir l'image et rendre le texte plus lisible
+                      colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.35), BlendMode.darken),
+                    ),
+                  ),
+                  // Optionnel: Un léger gradient en bas pour améliorer la lisibilité du titre
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
+                        stops: const [0.5, 1.0],
+                      ),
                     ),
                   ),
                 ),
@@ -904,7 +854,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(top: 20.0),
+              padding: const EdgeInsets.only(top: 20.0), // Espace après l'AppBar
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -924,26 +874,28 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
                   _buildDetailedReactionsDisplay(context, interactionProvider),
                   const Divider(indent: 20, endIndent: 20, height: 12, thickness: 0.8),
                   _buildCommentsPreview(context, interactionProvider, displayCommentCount),
-                  Theme(
+                  Theme( // Enlever le diviseur par défaut de ExpansionTile
                     data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                     child: ExpansionTile(
                       key: _commentsExpansionTileKey,
                       initiallyExpanded: _isCommentsExpanded,
                       onExpansionChanged: (expanding) {
                         setState(() => _isCommentsExpanded = expanding);
-                        if (expanding) {
+                        if (expanding) { // Scroller quand on ouvre
                           Future.delayed(const Duration(milliseconds: 150), () {
                             if (mounted) _scrollToSection(_commentsExpansionTileKey);
                           });
                         }
                       },
-                      title: const SizedBox.shrink(), // Title is handled by _buildCommentsPreview
-                      tilePadding: EdgeInsets.zero,
+                      title: const SizedBox.shrink(), // Le titre est géré par _buildCommentsPreview
+                      tilePadding: EdgeInsets.zero, // Pas de padding pour le titre vide
                       childrenPadding: const EdgeInsets.only(bottom: 16.0),
                       children: <Widget>[
                         if (_isCommentsExpanded)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                            // Le widget CommentSectionWidget doit être implémenté
+                            // et gérer son propre état de chargement/affichage des commentaires.
                             child: CommentSectionWidget(songId: widget.song.id),
                           ),
                       ],

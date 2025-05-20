@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/song.dart'; // Assurez-vous que ce chemin est correct
 import '../models/tag.dart';  // Assurez-vous que ce chemin est correct
 
-import '../services/ApiService.dart'; // Assurez-vous que ce chemin est correct
+import '../widgets/services/ApiService.dart'; // Assurez-vous que ce chemin est correct
 import 'auth_provider.dart';      // Assurez-vous que ce chemin est correct
 
 class SongProvider with ChangeNotifier {

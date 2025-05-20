@@ -1,5 +1,6 @@
 // lib/screens/playlist_detail_screen.dart
 import 'package:flutter/material.dart';
+import 'package:pfa/screens/song_detail_screen.dart';
 import 'package:pfa/screens/user_profile_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -7,7 +8,7 @@ import '../models/playlist.dart';
 import '../models/song.dart';
 import '../providers/playlist_provider.dart';
 import '../providers/song_provider.dart';
-import '../services/audio_player_service.dart';
+import '../widgets/services/audio_player_service.dart';
 import '../widgets/common/song_list_item.dart';
  // Assurez-vous que ce chemin est correct
 
@@ -205,8 +206,11 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           return SongListItem( // Utilisation du widget partagé
             song: song,
             onTap: () {
-              audioPlayerService.play(song);
-              // Optionnel: Afficher un feedback ou naviguer vers un écran de lecture complet
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => SongDetailScreen(song: song),
+                )
+              );
             },
             // Optionnel: Ajouter une action pour supprimer la chanson de la playlist
             trailing: IconButton(

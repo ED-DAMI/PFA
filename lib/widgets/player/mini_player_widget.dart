@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:pfa/config/api_config.dart';
 import 'package:provider/provider.dart';
-import '../../services/audio_player_service.dart';
+import '../services/audio_player_service.dart';
 import '../../models/song.dart';
 import '../../screens/song_detail_screen.dart'; // Pour naviguer vers les détails
 

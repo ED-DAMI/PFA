@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/song_provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/audio_player_service.dart';
+import '../widgets/services/audio_player_service.dart';
 
 import '../widgets/common/search_bar_widget.dart';
 import '../widgets/home/song_list_widget.dart';

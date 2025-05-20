@@ -201,7 +201,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Widget _buildPlaylistSliver() {
     return Consumer<PlaylistProvider>(
       builder: (context, playlistProvider, child) {
-        if (playlistProvider.isLoading && !playlistProvider.isInitialized) {
+        if (playlistProvider.isLoadingList && !playlistProvider.isInitialized) {
           return const SliverToBoxAdapter(
             child: Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator())),
           );

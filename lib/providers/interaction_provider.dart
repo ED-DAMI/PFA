@@ -2,7 +2,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/comment.dart';
 import '../models/reaction.dart';
-import '../services/ApiService.dart';
+import '../widgets/services/ApiService.dart';
 import './auth_provider.dart';
 import './song_provider.dart';
 
