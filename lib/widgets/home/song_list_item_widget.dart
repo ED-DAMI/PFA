@@ -3,9 +3,11 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:pfa/config/api_config.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/song.dart';
-import '../services/audio_player_service.dart';
-import '../../screens/song_detail_screen.dart'; // SongDetailScreen doit accepter `openReactionsDialogOnLoad`
+import '../../screens/song_detail_screen.dart';
+import '../../services/audio_player_service.dart';
+
 
 class SongListItemWidget extends StatelessWidget {
   final Song song;

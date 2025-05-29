@@ -3,15 +3,18 @@ import 'dart:convert'; // Pour jsonEncode/Decode
 import 'dart:io'; // Pour File (upload)
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart'; // Pour MediaType (upload)
+import 'package:http_parser/http_parser.dart';
 
-import '../../config/api_config.dart'; // Votre URL de base API_BASE_URL
+import '../config/api_config.dart';
+import '../models/playlist.dart';
+import '../models/song.dart';
+import '../models/comment.dart';
+import '../models/reaction.dart';
+import '../models/tag.dart'; // Pour MediaType (upload)
 
-import '../../models/comment.dart'; // Assurez-vous que Comment.fromJson existe
-import '../../models/playlist.dart'; // Assurez-vous que Playlist.fromJson existe
-import '../../models/reaction.dart'; // Assurez-vous que Reaction.fromJson existe
-import '../../models/song.dart';     // Assurez-vous que Song.fromJson existe
-import '../../models/tag.dart';      // Assurez-vous que Tag.fromJson existe
+
+
+   // Assurez-vous que Tag.fromJson existe
 
 class ApiService {
   final String _baseUrl = API_BASE_URL; // Utiliser la variable de classe

@@ -2,8 +2,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:audioplayers/audioplayers.dart';
-import '../../config/api_config.dart';
-import '../../models/song.dart';
+
+import '../config/api_config.dart';
+import '../models/song.dart';
+
 
 class AudioPlayerService with ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();

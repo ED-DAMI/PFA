@@ -21,6 +21,7 @@ int _safeIntParse(dynamic value) {
 }
 
 List<String>? _safeListStringParse(dynamic value) {
+
   if (value is List) {
     return value.map((item) => item?.toString()).whereType<String>().toList();
   }

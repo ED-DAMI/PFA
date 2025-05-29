@@ -1,8 +1,9 @@
 // lib/providers/playlist_provider.dart
 import 'package:flutter/foundation.dart';
 import '../models/playlist.dart'; // Assurez-vous que Playlist a une méthode copyWith
-import '../models/song.dart';
-import '../widgets/services/ApiService.dart';
+
+
+import '../services/ApiService.dart';
 import 'auth_provider.dart';
 
 class PlaylistProvider with ChangeNotifier {

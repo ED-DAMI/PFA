@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/song.dart'; // Assurez-vous que ce chemin est correct
 import '../models/tag.dart';  // Assurez-vous que ce chemin est correct
 
-import '../widgets/services/ApiService.dart'; // Assurez-vous que ce chemin est correct
+import '../services/ApiService.dart'; // Assurez-vous que ce chemin est correct
 import 'auth_provider.dart';      // Assurez-vous que ce chemin est correct
 
 class SongProvider with ChangeNotifier {
@@ -171,7 +171,7 @@ class SongProvider with ChangeNotifier {
       print("SongProvider: Tag selected: ${tag?.name ?? 'None'}");
     }
     // Vérifier si la sélection a réellement changé pour éviter des rebuilds inutiles
-    if (_selectedTag?.id != tag?.id) {
+    if (_selectedTag?.name != tag?.name) {
       _selectedTag = tag;
       _applyFiltersAndSearch();
     }
@@ -195,15 +195,8 @@ class SongProvider with ChangeNotifier {
     List<Song> tempSongs = List.from(_allSongs);
 
     if (_selectedTag != null) {
-      // Assurez-vous que la logique de filtrage par tag correspond à vos modèles.
-      // Exemple: si Song.genre est un String et Tag.name est le nom du genre.
-      tempSongs = tempSongs.where((song) =>
-      song.genre.toLowerCase() == _selectedTag!.name.toLowerCase()
+      tempSongs = tempSongs.where((song) => song.tags?.any((tag) => tag == _selectedTag!.name) ?? false
       ).toList();
-      // Ou si Song.tags est une List<String> de noms de tags:
-      // tempSongs = tempSongs.where((song) =>
-      //   song.tags.any((tagName) => tagName.toLowerCase() == _selectedTag!.name.toLowerCase())
-      // ).toList();
     }
 
     if (_searchQuery.isNotEmpty) {

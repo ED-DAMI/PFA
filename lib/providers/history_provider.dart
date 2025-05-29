@@ -1,7 +1,8 @@
 // lib/providers/history_provider.dart
 import 'package:flutter/foundation.dart';
 import '../models/song.dart'; // Historique contient des chansons
-import '../widgets/services/ApiService.dart';
+
+import '../services/ApiService.dart';
 import 'auth_provider.dart';
 
 class HistoryProvider with ChangeNotifier {

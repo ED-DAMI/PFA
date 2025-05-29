@@ -8,12 +8,13 @@ import 'package:flutter/foundation.dart';
 import 'package:share_plus/share_plus.dart'; // Import pour la fonctionnalité de partage
 
 import '../models/song.dart'; // Assurez-vous que Song a les getters formatés
-import '../models/playlist.dart'; // Pour _showAddToPlaylistDialog
+// Pour _showAddToPlaylistDialog
 import '../providers/auth_provider.dart';
 import '../providers/interaction_provider.dart';
 import '../providers/playlist_provider.dart'; // Pour _showAddToPlaylistDialog
-import '../widgets/services/ApiService.dart';
-import '../widgets/services/audio_player_service.dart';
+
+import '../services/ApiService.dart';
+import '../services/audio_player_service.dart';
 import '../utils/helpers.dart'; // Pour showAppSnackBar et formatDuration
 import '../widgets/song_detail/comment_section_widget.dart'; // Widget à implémenter
 import '../widgets/song_detail/reactions_dialog_helper.dart';

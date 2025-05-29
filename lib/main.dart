@@ -3,8 +3,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'app.dart';
-import 'widgets/services/ApiService.dart';
-import 'widgets/services/audio_player_service.dart';
+import 'services/ApiService.dart';
+import 'services/audio_player_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/song_provider.dart';
 import 'providers/interaction_provider.dart';

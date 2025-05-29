@@ -32,7 +32,9 @@ class _ReactionsDialogContentState extends State<_ReactionsDialogContent> {
 
     if (widget.interactionProvider.currentSongId != widget.songId) {
       if (kDebugMode) {
-        print("ReactionsDialog WARN: songId (${widget.songId}) differs from provider's currentSongId (${widget.interactionProvider.currentSongId}).");
+        print("ReactionsDialog WARN: songId (${widget
+            .songId}) differs from provider's currentSongId (${widget
+            .interactionProvider.currentSongId}).");
       }
     }
 
@@ -47,7 +49,9 @@ class _ReactionsDialogContentState extends State<_ReactionsDialogContent> {
         Navigator.of(widget.dialogContext).pop();
       }
     } else {
-      showAppSnackBar(widget.dialogContext, widget.interactionProvider.error ?? "Erreur lors de la réaction.", isError: true);
+      showAppSnackBar(widget.dialogContext,
+          widget.interactionProvider.error ?? "Erreur lors de la réaction.",
+          isError: true);
     }
   }
 

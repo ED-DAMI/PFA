@@ -1,7 +1,9 @@
 // lib/widgets/common/song_list_item.dart
 import 'package:flutter/material.dart';
 import 'package:pfa/config/api_config.dart';
-import '../../models/song.dart'; // Assurez-vous que le chemin vers Song est correct
+
+import '../../models/song.dart';
+// Assurez-vous que le chemin vers Song est correct
 
 class SongListItem extends StatelessWidget {
   final Song song;

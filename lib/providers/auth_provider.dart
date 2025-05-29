@@ -7,7 +7,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Importé
 import 'package:jwt_decode/jwt_decode.dart';
 
 import '../models/user.dart';
-import '../widgets/services/ApiService.dart';
+import '../services/ApiService.dart';
+
 
 enum AuthState { uninitialized, authenticated, unauthenticated, authenticating, tokenRefreshing }
 

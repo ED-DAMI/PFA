@@ -2,9 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:pfa/config/api_config.dart';
 import 'package:provider/provider.dart';
-import '../services/audio_player_service.dart';
+
 import '../../models/song.dart';
-import '../../screens/song_detail_screen.dart'; // Pour naviguer vers les détails
+import '../../screens/song_detail_screen.dart';
+import '../../services/audio_player_service.dart'; // Pour naviguer vers les détails
 
 class MiniPlayerWidget extends StatelessWidget {
   const MiniPlayerWidget({super.key});
