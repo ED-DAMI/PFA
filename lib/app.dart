@@ -1,5 +1,6 @@
 // lib/app.dart
 import 'package:flutter/material.dart';
+import 'package:pfa/screens/edit_profile_screen.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/splash_screen.dart';
@@ -45,7 +46,9 @@ class MyApp extends StatelessWidget {
         // HomeScreen.routeName: (ctx) => const HomeScreen(),
         // LoginScreen.routeName: (ctx) => const LoginScreen(), // Assurez-vous que LoginScreen a un routeName
 
-        UserProfileScreen.routeName: (ctx) => const UserProfileScreen(), // <-- LA ROUTE MANQUANTE
+        UserProfileScreen.routeName: (ctx) => const UserProfileScreen(),
+        EditProfileScreen.routeName: (ctx) => const EditProfileScreen(),
+        // <-- LA ROUTE MANQUANTE
            // <-- Exemple pour une autre route
 
       },

@@ -39,7 +39,7 @@ class _SignupScreenState extends State<SignupScreen> {
       showAppSnackBar(context, 'Inscription réussie! Vous pouvez maintenant vous connecter.');
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (ctx) => const LoginScreen()));
     } else {
-      showAppSnackBar(context, authProvider.errorMessage?? "Erreur d'inscription", isError: true);
+      showAppSnackBar(context, authProvider.error?? "Erreur d'inscription", isError: true);
     }
   }
 

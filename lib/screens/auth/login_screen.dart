@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Mais si vous voulez afficher un message de succès :
       // showAppSnackBar(context, 'Connexion réussie!');
     } else {
-      showAppSnackBar(context, authProvider.errorMessage ?? 'Erreur de connexion', isError: true);
+      showAppSnackBar(context, authProvider.error ?? 'Erreur de connexion', isError: true);
     }
   }
 
@@ -53,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Text('MusicApp', style: Theme.of(context).textTheme.headlineMedium),
+                Text('DAMI', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 30),
                 TextFormField(
                   decoration: const InputDecoration(labelText: 'Email'),

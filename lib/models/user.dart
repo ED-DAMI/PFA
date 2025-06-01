@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart'; // Pour @override et potentiellement kDebugMode
+import 'package:flutter/foundation.dart';
+import 'package:pfa/config/api_config.dart'; // Pour @override et potentiellement kDebugMode
 
 // Helper local pour parser les dates de manière sûre
 DateTime? _safeDateTimeParse(dynamic value) {
@@ -28,8 +29,8 @@ class User {
     required this.id,
     required this.email,
     required this.name,
-    this.avatarUrl, // Optionnel
-    this.joinDate,  // Optionnel
+    this.avatarUrl,
+    this.joinDate,
   });
 
   /// Factory pour créer une instance de [User] à partir d'un Map JSON.
@@ -38,30 +39,39 @@ class User {
   /// Utilise des valeurs par défaut sûres si des champs sont manquants ou invalides.
   /// Parse les dates de manière sécurisée.
   factory User.fromJson(Map<String, dynamic> json) {
+    String? finalAvatarUrl;
+    final String? relativeAvatarPath = json['avatarUrl'] as String?; // Ex: "api/users/ID/avatar"
+
+    if (API_BASE_URL.isNotEmpty && relativeAvatarPath != null && relativeAvatarPath.isNotEmpty) {
+      // Vérifier si relativeAvatarPath est déjà une URL complète
+      if (relativeAvatarPath.toLowerCase().startsWith('http://') || relativeAvatarPath.toLowerCase().startsWith('https://')) {
+        finalAvatarUrl = relativeAvatarPath;
+      } else {
+        // Construire l'URL complète
+        String tempBase = API_BASE_URL; // Ex: "http://192.168.1.33:8080"
+        if (tempBase.endsWith('/')) {
+          tempBase = tempBase.substring(0, tempBase.length - 1);
+        }
+        String tempRelative = relativeAvatarPath; // Ex: "api/users/ID/avatar"
+        if (!tempRelative.startsWith('/')) {
+          tempRelative = '/$tempRelative';
+        }
+        finalAvatarUrl = tempBase + tempRelative; // Ex: "http://192.168.1.33:8080/api/users/ID/avatar"
+      }
+    } else if (relativeAvatarPath != null && (relativeAvatarPath.toLowerCase().startsWith('http://') || relativeAvatarPath.toLowerCase().startsWith('https://'))) {
+      finalAvatarUrl = relativeAvatarPath; // Cas où API_BASE_URL est vide mais on a une URL complète
+    }
+
     return User(
-      // Gère '_id' ou 'id' comme clé pour l'identifiant. Fournit un fallback unique si absent.
       id: json['_id']?.toString() ?? json['id']?.toString() ?? 'error_user_id_${DateTime.now().millisecondsSinceEpoch}',
-
-      // Utilise une chaîne vide comme fallback pour l'email si absent.
       email: json['email'] as String? ?? '',
-
-      // Utilise 'name' ou 'username' comme clé pour le nom. Fournit 'Utilisateur' comme fallback.
-      name: json['name'] as String? ?? json['username'] as String? ?? 'Utilisateur',
-
-      // Récupère 'avatarUrl' comme String nullable.
-      avatarUrl: json['avatarUrl'] as String?,
-
-      // Parse la date d'inscription en utilisant une fonction helper sûre.
-      // Vérifie plusieurs clés potentielles ('joinDate', 'createdAt', 'registeredAt').
+      name: json['name'] as String? ?? json['username'] as String? ?? 'Utilisateur Inconnu',
+      avatarUrl: finalAvatarUrl, // L'URL complète est assignée ici
       joinDate: _safeDateTimeParse(json['joinDate'] ?? json['createdAt'] ?? json['registeredAt']),
     );
   }
 
-  /// Convertit l'instance [User] en un Map JSON.
-  ///
-  /// Utile pour envoyer des données utilisateur à une API.
-  /// N'inclut les champs optionnels (`avatarUrl`, `joinDate`) que s'ils ne sont pas null.
-  /// Utilise la clé 'id' (ajustez si votre API attend '_id').
+
   Map<String, dynamic> toJson() {
     return {
       'id': id, // Utilisez '_id': id, si votre API attend cela
@@ -72,7 +82,7 @@ class User {
     };
   }
 
-  /// Crée une copie de cette instance [User] avec les champs spécifiés remplacés.
+
   User copyWith({
     String? id,
     String? email,
@@ -89,7 +99,7 @@ class User {
     );
   }
 
-  /// Retourne une représentation textuelle de l'objet User pour le débogage.
+
   @override
   String toString() {
     return 'User(id: $id, name: "$name", email: "$email", avatarUrl: $avatarUrl, joinDate: ${joinDate?.toIso8601String()})';
@@ -101,11 +111,9 @@ class User {
       identical(this, other) ||
           other is User && runtimeType == other.runtimeType && id == other.id;
 
-  /// Retourne le hash code basé sur l'identifiant unique [id].
+
   @override
   int get hashCode => id.hashCode;
 
-  /// Fournit `username` comme un alias pour `name`, utile pour la compatibilité
-  /// ou si l'interface utilisateur s'attend à un `username`.
   String get username => name;
 }

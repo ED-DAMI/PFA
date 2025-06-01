@@ -1,3 +1,4 @@
+// lib/widgets/home/tag_list_widget.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/song_provider.dart';
@@ -11,50 +12,76 @@ class TagListWidget extends StatelessWidget {
     final songProvider = Provider.of<SongProvider>(context);
     final tags = songProvider.tags;
     final selectedTag = songProvider.selectedTag;
+    final chipTheme = Theme.of(context).chipTheme;
 
-    if (tags.isEmpty && !songProvider.isLoading) { // Ne pas afficher si pas de tags et pas en chargement
-      return const SizedBox.shrink();
-    }
-    if (songProvider.isLoading && tags.isEmpty) { // Afficher un petit loader si les tags sont en cours de chargement
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8.0),
-        child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+    // --- MODIFICATION ICI: Indicateur de chargement plus discret si les tags sont vides initialement ---
+    if (songProvider.isLoadingInitialTags && tags.isEmpty) {
+      return Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        alignment: Alignment.centerLeft, // Aligner à gauche pour que ça ne saute pas au centre
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16.0), // Un peu de padding
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor.withOpacity(0.7)),
+            ),
+          ),
+        ),
       );
     }
 
+    if (tags.isEmpty && !songProvider.isLoading) {
+      return const SizedBox.shrink();
+    }
+    // --- FIN DE LA MODIFICATION ---
 
     return Container(
-      height: 50, // Hauteur fixe pour la liste de tags
+      height: 50,
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: tags.length + 1, // +1 pour le tag "Tous"
+        itemCount: tags.length + 1,
+        padding: const EdgeInsets.symmetric(horizontal: 10.0), // Padding pour ne pas coller aux bords
         itemBuilder: (ctx, index) {
-          if (index == 0) { // Le tag "Tous"
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6.0),
-              child: ChoiceChip(
-                label: const Text('Tous'),
-                selected: selectedTag == null,
-                onSelected: (isSelected) {
-                  if (isSelected) {
-                    songProvider.selectTag(null);
-                  }
-                },
-                // Utilisez les couleurs du thème
-                selectedColor: Theme.of(context).chipTheme.selectedColor,
-                backgroundColor: Theme.of(context).chipTheme.backgroundColor,
-                labelStyle: selectedTag == null
-                    ? Theme.of(context).chipTheme.secondaryLabelStyle // Style pour texte quand sélectionné
-                    : Theme.of(context).chipTheme.labelStyle, // Style pour texte quand non sélectionné
+          Widget chip;
+          if (index == 0) {
+            final bool isSelected = selectedTag == null;
+            chip = ChoiceChip(
+              label: const Text('Tous'),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  songProvider.selectTag(null);
+                }
+              },
+              // --- MODIFICATION ICI: Utilisation plus explicite des couleurs du thème ---
+              selectedColor: chipTheme.selectedColor ?? Theme.of(context).primaryColor,
+              backgroundColor: chipTheme.backgroundColor ?? Colors.grey[300],
+              labelStyle: TextStyle(
+                color: isSelected
+                    ? (chipTheme.secondaryLabelStyle?.color ?? Colors.white)
+                    : (chipTheme.labelStyle?.color ?? Colors.black87),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
+              // Ajout d'un avatar pour un look plus "pilule"
+              // avatar: isSelected ? Icon(Icons.check_circle, color: chipTheme.secondaryLabelStyle?.color ?? Colors.white, size: 18) : null,
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isSelected ? Colors.transparent : (Theme.of(context).dividerColor) ,
+                  )
+              ),
+              // --- FIN DE LA MODIFICATION ---
             );
-          }
-          final tag = tags[index - 1];
-          final isSelected = selectedTag?.id == tag.id;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6.0),
-            child: ChoiceChip(
+          } else {
+            final tag = tags[index - 1];
+            final isSelected = selectedTag?.id == tag.id;
+            chip = ChoiceChip(
               label: Text(tag.name),
               selected: isSelected,
               onSelected: (selected) {
@@ -62,15 +89,30 @@ class TagListWidget extends StatelessWidget {
                   songProvider.selectTag(tag);
                 }
               },
-              selectedColor: Theme.of(context).chipTheme.selectedColor,
-              backgroundColor: Theme.of(context).chipTheme.backgroundColor,
-              labelStyle: isSelected
-                  ? Theme.of(context).chipTheme.secondaryLabelStyle
-                  : Theme.of(context).chipTheme.labelStyle,
-            ),
+              selectedColor: chipTheme.selectedColor ?? Theme.of(context).primaryColor,
+              backgroundColor: chipTheme.backgroundColor ?? Colors.grey[300],
+              labelStyle: TextStyle(
+                color: isSelected
+                    ? (chipTheme.secondaryLabelStyle?.color ?? Colors.white)
+                    : (chipTheme.labelStyle?.color ?? Colors.black87),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+              // avatar: isSelected ? Icon(Icons.check_circle, color: chipTheme.secondaryLabelStyle?.color ?? Colors.white, size: 18) : null,
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isSelected ? Colors.transparent : (Theme.of(context).dividerColor) ,
+                  )
+              ),
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0), // Réduire le padding horizontal entre les chips
+            child: chip,
           );
         },
       ),
     );
   }
-}// TODO Implement this library.
+}

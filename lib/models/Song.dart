@@ -147,4 +147,22 @@ class Song {
       totalReactionCount: totalReactionCount ?? this.totalReactionCount,
     );
   }
+
+  static Song empty() {
+    return Song(
+      id: '',
+      title: '',
+      artist:'' ,
+      album: '',
+      genre: 'Genre Inconnu',
+      duration: 0,
+      releaseDate:null,
+      language:null,
+      tags: null,
+      createdAt: null,
+      viewCount: 0,
+      commentCount: 0, // Redundant ?? 0 removed
+      totalReactionCount: 0,
+    );
+  }
 }

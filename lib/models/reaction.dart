@@ -16,7 +16,7 @@ class Reaction {
     'LIKE': '👍',
     'SAD': '😢',
     'SURPRISED': '😮',
-    // Ajoutez d'autres emojis ici si votre backend en a plus
+
   };
 
   Reaction({
