@@ -24,6 +24,7 @@ class ApiService {
     final String responseBody = utf8.decode(response.bodyBytes);
 
     if (kDebugMode) {
+      print(API_BASE_URL);
       print(
           "API Request: ${response.request?.method} ${response.request?.url}");
       print("API Response Status: ${response.statusCode}");
@@ -109,6 +110,7 @@ class ApiService {
   // --- Authentification ---
 
   Future<Map<String, dynamic>?> loginUser(String email, String password) async {
+
     if (kDebugMode) print("ApiService: loginUser - Email: $email");
     final response = await http.post(
       Uri.parse('$_baseUrl/api/auth/login'),

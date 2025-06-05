@@ -634,141 +634,603 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
         ? interactionProvider.comments.first
         : null;
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _isCommentsExpanded = !_isCommentsExpanded;
-        });
-        if (_isCommentsExpanded) {
-          Future.delayed(const Duration(milliseconds: 150), () {
-            if (mounted) _scrollToSection(_commentsExpansionTileKey);
-          });
-        }
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.chat_bubble_outline_rounded, size: 24, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                const SizedBox(width: 10),
-                Text('Commentaires', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(width: 8),
-                Text(
-                  (interactionProvider.isLoadingComments && !interactionProvider.isCommentsInitializedForCurrentSong && interactionProvider.currentSongId == widget.song.id)
-                      ? "(Chargement...)"
-                      : '($displayCommentCount)',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
-                ),
-                const Spacer(),
-                Icon(_isCommentsExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_right, color: Theme.of(context).hintColor),
-              ],
-            ),
-            if (latestComment != null && !_isCommentsExpanded) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer, // Ou une couleur basée sur l'avatar de l'utilisateur si disponible
-                    child: Text(
-                      latestComment.author.isNotEmpty ? latestComment.author[0].toUpperCase() : "?", // Supposant que Comment a authorUsername
-                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer, fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(latestComment.text, style: Theme.of(context).textTheme.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ),
-                ],
-              ),
-            ],
-          ],
+    final bool isLoading = interactionProvider.isLoadingComments &&
+        !interactionProvider.isCommentsInitializedForCurrentSong &&
+        interactionProvider.currentSongId == widget.song.id;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16.0),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+          width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).shadowColor.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-    );
-  }
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16.0),
+          onTap: () {
+            setState(() {
+              _isCommentsExpanded = !_isCommentsExpanded;
+            });
+            if (_isCommentsExpanded) {
+              Future.delayed(const Duration(milliseconds: 150), () {
+                if (mounted) _scrollToSection(_commentsExpansionTileKey);
+              });
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // En-tête des commentaires
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Commentaires',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.secondaryContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  isLoading ? "..." : displayCommentCount.toString(),
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (isLoading) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              "Chargement des commentaires...",
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: AnimatedRotation(
+                        turns: _isCommentsExpanded ? 0.5 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
 
-  Widget _buildRecommendationsSectionUI() {
-    if (_isLoadingRecommendations) {
-      return const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 40.0), child: CircularProgressIndicator()));
-    }
-    if (_recommendationsError != null) {
-      return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text(_recommendationsError!, style: TextStyle(color: Theme.of(context).colorScheme.error))));
-    }
-    if (_recommendedSongs.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20.0),
-        child: Center(child: Text("Aucune recommandation pour le moment.")),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 12.0),
-          child: Text("Vous pourriez aussi aimer", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-        ),
-        SizedBox(
-          height: 190,
-          child: ListView.builder(
-            key: const PageStorageKey<String>('recommendationsList'), // Clé pour la préservation de l'état de défilement
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10.0),
-            itemCount: _recommendedSongs.length,
-            itemBuilder: (ctx, index) {
-              final rSong = _recommendedSongs[index];
-              // Supposer que Song a un getter `coverArtUrl` ou que vous construisez l'URL ici
-              final String rCoverUrl = rSong.coverImageUrl ?? '${API_BASE_URL}/api/songs/${rSong.id}/cover';
-
-              return Container(
-                width: MediaQuery.of(context).size.width * 0.38,
-                margin: const EdgeInsets.symmetric(horizontal: 6),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8.0),
-                  onTap: () {
-                    // Utiliser push pour permettre le retour, ou pushReplacement si vous ne voulez pas empiler les écrans de détail.
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => SongDetailScreen(song: rSong)));
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 1,
-                        child: Hero( // Ajout d'un Hero tag pour une transition douce si possible
-                          tag: 'song_cover_recommendation_${rSong.id}',
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8.0),
-                            child: Image.network(
-                              rCoverUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceVariant, borderRadius: BorderRadius.circular(8.0)),
-                                child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 40),
+                // Aperçu du dernier commentaire
+                if (latestComment != null && !_isCommentsExpanded) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Theme.of(context).colorScheme.primary,
+                                Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              latestComment.author.isNotEmpty
+                                  ? latestComment.author[0].toUpperCase()
+                                  : "?",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                latestComment.author,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                latestComment.text,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  height: 1.3,
+                                  letterSpacing: -0.1,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            "Dernier",
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // État vide ou indication pour voir plus
+                if (latestComment == null && !isLoading && !_isCommentsExpanded) ...[
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.chat_outlined,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          displayCommentCount > 0
+                              ? "Appuyez pour voir tous les commentaires"
+                              : "Aucun commentaire pour le moment",
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Indication d'action
+                if (displayCommentCount > 1 && latestComment != null && !_isCommentsExpanded) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                        width: 1,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0, left: 2.0, right: 2.0),
-                        child: Text(rSong.title, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    child: Text(
+                      "Voir ${displayCommentCount - 1} autre${displayCommentCount - 1 > 1 ? 's' : ''} commentaire${displayCommentCount - 1 > 1 ? 's' : ''}",
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2.0, left: 2.0, right: 2.0),
-                        child: Text(rSong.artist, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  Widget _buildRecommendationsSectionUI() {
+    if (_isLoadingRecommendations) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 50.0),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "Recherche de recommandations...",
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_recommendationsError != null) {
+      return Container(
+        margin: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12.0),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.error.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.error_outline,
+              color: Theme.of(context).colorScheme.error,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _recommendationsError!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_recommendedSongs.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 20.0),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.recommend_outlined,
+                  size: 40,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "Aucune recommandation pour le moment",
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Écoutez plus de musique pour obtenir des suggestions personnalisées",
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 16.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.auto_awesome,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Vous pourriez aussi aimer",
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Sélectionnées pour vous",
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
-        ),
-      ],
+          SizedBox(
+            height: 220,
+            child: ListView.builder(
+              key: const PageStorageKey<String>('recommendationsList'),
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              itemCount: _recommendedSongs.length,
+              itemBuilder: (ctx, index) {
+                final rSong = _recommendedSongs[index];
+                final String rCoverUrl = rSong.coverImageUrlPath ??
+                    '${API_BASE_URL}/api/songs/${rSong.id}/cover';
+
+                return Container(
+                  width: MediaQuery.of(context).size.width * 0.42,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16.0),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SongDetailScreen(song: rSong),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Image avec effet de superposition et indicateur de lecture
+                            Stack(
+                              children: [
+                                AspectRatio(
+                                  aspectRatio: 1,
+                                  child: Hero(
+                                    tag: 'song_cover_recommendation_${rSong.id}',
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12.0),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12.0),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Image.network(
+                                              rCoverUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => Container(
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.topLeft,
+                                                    end: Alignment.bottomRight,
+                                                    colors: [
+                                                      Theme.of(context).colorScheme.surfaceVariant,
+                                                      Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
+                                                    ],
+                                                  ),
+                                                  borderRadius: BorderRadius.circular(12.0),
+                                                ),
+                                                child: Icon(
+                                                  Icons.music_note_rounded,
+                                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                  size: 45,
+                                                ),
+                                              ),
+                                            ),
+                                            // Effet de superposition au survol/focus
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.circular(12.0),
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [
+                                                    Colors.transparent,
+                                                    Colors.black.withOpacity(0.1),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Icône de lecture en superposition
+                                Positioned(
+                                  bottom: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Icon(
+                                      Icons.play_arrow_rounded,
+                                      color: Theme.of(context).colorScheme.onPrimary,
+                                      size: 16,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // Informations de la chanson avec meilleur espacement
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 12.0, left: 4.0, right: 4.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      rSong.title,
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.2,
+                                        letterSpacing: -0.2,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      rSong.artist,
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        height: 1.1,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 
@@ -782,7 +1244,7 @@ class _SongDetailScreenState extends State<SongDetailScreen> {
     final bool isPausedOnThisSong = isThisSongLoadedInPlayer && audioPlayerService.playerState == PlayerState.paused;
 
     // Supposer que Song a un getter `coverArtUrl` ou que vous construisez l'URL ici
-    final String coverImageUrl = widget.song.coverImageUrl ?? '${API_BASE_URL}/api/songs/${widget.song.id}/cover';
+    final String coverImageUrl = widget.song.coverImageUrlPath ?? '${API_BASE_URL}/api/songs/${widget.song.id}/cover';
 
     // Calcul du nombre de commentaires à afficher
     int displayCommentCount = widget.song.commentCount; // Valeur par défaut du modèle

@@ -1,68 +1,127 @@
-// lib/widgets/common/song_list_item.dart
+// ../widgets/common/song_list_item.dart
 import 'package:flutter/material.dart';
-import 'package:pfa/config/api_config.dart';
-
-import '../../models/song.dart';
-// Assurez-vous que le chemin vers Song est correct
+import 'package:pfa/models/song.dart'; // Assurez-vous que le chemin est correct
 
 class SongListItem extends StatelessWidget {
   final Song song;
-  final VoidCallback? onTap;
-  final Widget? trailing;
   final String? coverArtUrl;
+  final VoidCallback? onTap;
+  final Widget? trailing; // Pour une flexibilité future
 
   const SongListItem({
     super.key,
     required this.song,
+    this.coverArtUrl,
     this.onTap,
     this.trailing,
-    this.coverArtUrl,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
+    // Utiliser les couleurs du thème directement pour une meilleure adaptabilité clair/sombre
+    final Color itemSubtleTextColor = theme.textTheme.bodySmall?.color ?? Colors.grey.shade600;
 
-    Widget leadingWidget;
-
-    String? actualCoverArtUrl ='$API_BASE_URL/api/songs/'+song.id+'/cover';
-
-    if (actualCoverArtUrl != null && actualCoverArtUrl.isNotEmpty) {
-      leadingWidget = CircleAvatar(
-        radius: 28,
-        backgroundImage: NetworkImage(actualCoverArtUrl),
-        backgroundColor: theme.colorScheme.primaryContainer,
-        onBackgroundImageError: (exception, stackTrace) {},
-        child: (actualCoverArtUrl == null || actualCoverArtUrl.isEmpty) ? Icon(Icons.music_note, color: theme.colorScheme.onPrimaryContainer) : null,
+    Widget coverArtWidget;
+    if (coverArtUrl != null && coverArtUrl!.isNotEmpty && coverArtUrl!.toLowerCase().startsWith('http')) {
+      coverArtWidget = Image.network(
+        coverArtUrl!,
+        fit: BoxFit.cover,
+        width: 50,
+        height: 50,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: 50,
+            height: 50,
+            color: theme.colorScheme.secondaryContainer.withOpacity(0.3),
+            child: Icon(Icons.music_note, color: theme.colorScheme.onSecondaryContainer.withOpacity(0.7)),
+          );
+        },
+        loadingBuilder: (BuildContext context, Widget child, ImageChunkEvent? loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: 50,
+            height: 50,
+            color: theme.colorScheme.secondaryContainer.withOpacity(0.1),
+            child: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
       );
     } else {
-      leadingWidget = CircleAvatar(
-        radius: 28,
-        backgroundColor: theme.colorScheme.primaryContainer,
-        child: Icon(
-          Icons.music_note,
-          color: theme.colorScheme.onPrimaryContainer,
-        ),
+      coverArtWidget = Container(
+        width: 50,
+        height: 50,
+        color: theme.colorScheme.secondaryContainer.withOpacity(0.3),
+        child: Icon(Icons.music_note, color: theme.colorScheme.onSecondaryContainer.withOpacity(0.7)),
       );
     }
 
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-      leading: leadingWidget,
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(4.0),
+        child: coverArtWidget,
+      ),
       title: Text(
         song.title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
       ),
-      subtitle: Text(
-        song.artist,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium?.copyWith(color: theme.textTheme.bodySmall?.color?.withOpacity(0.75)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            song.artist,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(color: itemSubtleTextColor),
+          ),
+          const SizedBox(height: 5), // Un peu plus d'espace
+          Row(
+            children: <Widget>[
+              Icon(Icons.timer_outlined, size: 14, color: itemSubtleTextColor),
+              const SizedBox(width: 4),
+              Text(
+                song.formattedDuration,
+                style: theme.textTheme.bodySmall?.copyWith(color: itemSubtleTextColor, fontSize: 12),
+              ),
+              const SizedBox(width: 12),
+              Icon(Icons.visibility_outlined, size: 14, color: itemSubtleTextColor),
+              const SizedBox(width: 4),
+              Text(
+                song.formattedViewCount,
+                style: theme.textTheme.bodySmall?.copyWith(color: itemSubtleTextColor, fontSize: 12),
+              ),
+
+              if (song.formattedListenedAt.isNotEmpty) ...[
+                const Spacer(), // Pousse la date à droite
+                Text(
+                  song.formattedListenedAt,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: itemSubtleTextColor.withOpacity(0.85),
+                    fontSize: 11.5, // Légèrement plus petit
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ],
+              // --- FIN DE L'AJOUT ---
+            ],
+          ),
+        ],
       ),
-      trailing: trailing ?? (onTap != null ? Icon(Icons.play_arrow_rounded, size: 28, color: theme.colorScheme.primary) : null),
+      trailing: this.trailing, // Utiliser le paramètre trailing du constructeur
       onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0), // Ajuster le padding
+      isThreeLine: true, // Important pour que le subtitle ait assez de place
     );
   }
 }
